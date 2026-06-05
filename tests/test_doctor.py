@@ -571,6 +571,124 @@ def test_path_scan_reports_path_python_mismatch(tmp_path: Path) -> None:
     assert str(running_python) in finding.details
 
 
+def test_path_scan_treats_uv_tool_python_as_isolated_runtime(
+    tmp_path: Path,
+) -> None:
+    virtual_env = tmp_path / "project" / ".venv"
+    path_python = virtual_env / "bin" / "python"
+    path_python3 = virtual_env / "bin" / "python3"
+    uv_tool_python = (
+        tmp_path / ".local" / "share" / "uv" / "tools" / "unidep" / "bin" / "python3"
+    )
+    _make_executable(path_python)
+    _make_executable(path_python3)
+    _make_executable(uv_tool_python)
+
+    report = run_doctor_checks(
+        home=tmp_path,
+        env={"VIRTUAL_ENV": str(virtual_env)},
+        path_env=str(path_python.parent),
+        python_executable=str(uv_tool_python),
+    )
+
+    assert report.finding_by_code("virtual-env-python-mismatch") is None
+    assert report.finding_by_code("path-python-mismatch") is None
+    assert report.finding_by_code("path-python3-mismatch") is None
+
+    finding = report.finding_by_code("uv-tool-python-runtime")
+    assert finding is not None
+    assert finding.level == "info"
+    assert str(virtual_env) in finding.details
+    assert str(uv_tool_python) in finding.details
+
+
+def test_path_scan_reports_uv_tool_runtime_without_active_environment(
+    tmp_path: Path,
+) -> None:
+    uv_tool_python = (
+        tmp_path / ".local" / "share" / "uv" / "tools" / "unidep" / "bin" / "python3"
+    )
+    _make_executable(uv_tool_python)
+
+    report = run_doctor_checks(
+        home=tmp_path,
+        env={},
+        path_env="",
+        python_executable=str(uv_tool_python),
+    )
+
+    finding = report.finding_by_code("uv-tool-python-runtime")
+    assert finding is not None
+    assert finding.level == "info"
+    assert str(uv_tool_python) in finding.details
+    assert "active environment markers" not in finding.details
+
+
+def test_path_scan_detects_uv_tool_dir_override(tmp_path: Path) -> None:
+    uv_tool_dir = tmp_path / "custom-tools"
+    uv_tool_python = uv_tool_dir / "unidep" / "bin" / "python3"
+    _make_executable(uv_tool_python)
+
+    report = run_doctor_checks(
+        home=tmp_path,
+        env={"UV_TOOL_DIR": str(uv_tool_dir)},
+        path_env="",
+        python_executable=str(uv_tool_python),
+    )
+
+    assert report.finding_by_code("uv-tool-python-runtime") is not None
+
+
+def test_path_scan_detects_xdg_uv_tool_directory(tmp_path: Path) -> None:
+    xdg_data_home = tmp_path / "xdg-data"
+    uv_tool_python = xdg_data_home / "uv" / "tools" / "unidep" / "bin" / "python3"
+    _make_executable(uv_tool_python)
+
+    report = run_doctor_checks(
+        home=tmp_path,
+        env={"XDG_DATA_HOME": str(xdg_data_home)},
+        path_env="",
+        python_executable=str(uv_tool_python),
+    )
+
+    assert report.finding_by_code("uv-tool-python-runtime") is not None
+
+
+def test_path_scan_detects_windows_uv_tool_directory(tmp_path: Path) -> None:
+    appdata = tmp_path / "AppData" / "Roaming"
+    uv_tool_python = (
+        appdata / "uv" / "data" / "tools" / "unidep" / "Scripts" / "python.exe"
+    )
+    _make_executable(uv_tool_python)
+
+    report = run_doctor_checks(
+        home=tmp_path,
+        env={"APPDATA": str(appdata)},
+        path_env="",
+        python_executable=str(uv_tool_python),
+    )
+
+    assert report.finding_by_code("uv-tool-python-runtime") is not None
+
+
+def test_path_scan_does_not_treat_other_uv_paths_as_tool_runtime(
+    tmp_path: Path,
+) -> None:
+    python = (
+        tmp_path / ".local" / "share" / "uv" / "tools" / "unidep" / "not-bin" / "python"
+    )
+    _make_executable(python)
+
+    report = run_doctor_checks(
+        home=tmp_path,
+        env={},
+        path_env="",
+        python_executable=str(python),
+    )
+
+    assert report.finding_by_code("uv-tool-python-runtime") is None
+
+
 def test_path_scan_reports_symlinked_virtualenv_python_mismatch(
     tmp_path: Path,
 ) -> None:
