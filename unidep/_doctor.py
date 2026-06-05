@@ -209,6 +209,7 @@ def run_doctor_checks(
         *_check_active_environment(resolved_env),
         *_check_path(
             env=resolved_env,
+            home=resolved_home,
             path_env=resolved_path,
             python_executable=resolved_python,
         ),
@@ -672,19 +673,23 @@ def _active_conda_prefixes(env: Mapping[str, str]) -> list[str]:
 def _check_path(
     *,
     env: Mapping[str, str],
+    home: Path,
     path_env: str,
     python_executable: str,
 ) -> list[DoctorFinding]:
     findings = []
     python_path = Path(python_executable)
-    findings.extend(_check_active_env_python_mismatch(env, python_path))
-    findings.extend(
-        _check_path_python_mismatch(
-            path_env=path_env,
-            path_extensions=env.get("PATHEXT"),
-            python_executable=python_path,
-        ),
-    )
+    if _is_uv_tool_python(python_path, env=env, home=home):
+        findings.append(_uv_tool_python_runtime_finding(env, python_path))
+    else:
+        findings.extend(_check_active_env_python_mismatch(env, python_path))
+        findings.extend(
+            _check_path_python_mismatch(
+                path_env=path_env,
+                path_extensions=env.get("PATHEXT"),
+                python_executable=python_path,
+            ),
+        )
 
     if env.get("CONDA_PREFIX") and _is_homebrew_python(python_path):
         findings.append(
@@ -861,6 +866,29 @@ def _first_nonempty_line(output: str | None) -> str | None:
     return next((line.strip() for line in output.splitlines() if line.strip()), None)
 
 
+def _uv_tool_python_runtime_finding(
+    env: Mapping[str, str],
+    python_executable: Path,
+) -> DoctorFinding:
+    active_markers = _active_python_environment_markers(env)
+    active_context = (
+        f"active environment markers: {', '.join(active_markers)}; "
+        if active_markers
+        else ""
+    )
+    return DoctorFinding(
+        code="uv-tool-python-runtime",
+        level="info",
+        title="UniDep is running from an isolated uv tool environment.",
+        details=f"{active_context}UniDep runtime: {python_executable}",
+        recommendation=(
+            "This is normal for `uv tool install unidep`. For mutating commands, "
+            "run UniDep from the environment you intend to modify or pass an "
+            "explicit target environment option when available."
+        ),
+    )
+
+
 def _version_probe_findings(
     executable: str,
     versions: list[_ExecutableVersion],
@@ -955,6 +983,34 @@ def _check_path_python_mismatch(
 def _is_homebrew_python(path: Path) -> bool:
     normalized = path.resolve(strict=False).as_posix().lower()
     return "/homebrew/" in normalized or "/cellar/python" in normalized
+
+
+def _is_uv_tool_python(path: Path, *, env: Mapping[str, str], home: Path) -> bool:
+    executable_name = _normalized_executable_name(path)
+    if not executable_name.startswith("python"):
+        return False
+    if path.parent.name.lower() not in {"bin", "scripts"}:
+        return False
+    tool_environment = path.parent.parent
+    for tools_dir in _uv_tool_directories(env, home):
+        if _same_path(tool_environment.parent, tools_dir):
+            return True
+    return False
+
+
+def _uv_tool_directories(env: Mapping[str, str], home: Path) -> tuple[Path, ...]:
+    if env.get("UV_TOOL_DIR"):
+        return (Path(env["UV_TOOL_DIR"]),)
+
+    tool_directories = []
+    if env.get("XDG_DATA_HOME"):
+        tool_directories.append(Path(env["XDG_DATA_HOME"]) / "uv" / "tools")
+    else:
+        tool_directories.append(home / ".local" / "share" / "uv" / "tools")
+
+    if env.get("APPDATA"):
+        tool_directories.append(Path(env["APPDATA"]) / "uv" / "data" / "tools")
+    return tuple(tool_directories)
 
 
 def _path_is_inside(path: Path, prefix: Path) -> bool:
