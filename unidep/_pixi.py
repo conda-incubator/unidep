@@ -117,6 +117,15 @@ def _parse_package_extras(pkg_name: str) -> tuple[str, list[str]]:
     return pkg_name, []
 
 
+def _direct_url_from_pip_version(version: str) -> str | None:
+    """Return a Pixi direct URL from a PEP 508 URL pin."""
+    stripped = version.strip()
+    if not stripped.startswith("@"):
+        return None
+    url = stripped[1:].strip()
+    return url if url.startswith(("http://", "https://", "file://")) else None
+
+
 def _make_pip_version_spec(
     version: str | dict[str, str],
     extras: list[str],
@@ -131,6 +140,11 @@ def _make_pip_version_spec(
         dict: Table with version and extras if extras present
 
     """
+    if isinstance(version, str):
+        direct_url = _direct_url_from_pip_version(version)
+        if direct_url is not None:
+            return {"url": direct_url, **({"extras": extras} if extras else {})}
+
     if not extras:
         return version
 
