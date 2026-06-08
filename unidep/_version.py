@@ -1,3 +1,3 @@
 """unidep - Unified Conda and Pip requirements management."""
 
-__version__ = "3.3.3"
+__version__ = "3.3.4"
