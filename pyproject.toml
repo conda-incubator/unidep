@@ -20,7 +20,7 @@ file = "README.md"
 content-type = "text/markdown"
 
 [project.urls]
-Homepage = "https://github.com/basnijholt/unidep"
+Homepage = "https://github.com/conda-incubator/unidep"
 
 [project.optional-dependencies]
 toml = ["tomli; python_version < '3.11'"]
@@ -135,7 +135,7 @@ python_version = "3.8"  # 3.7 is no longer supported by mypy
 
 # Use bump-my-version, e.g., call `bump-my-version bump minor`
 [tool.bumpversion]
-current_version = "3.2.1"
+current_version = "3.3.4"
 commit = true
 commit_args = "--no-verify"
 tag = true

@@ -410,6 +410,31 @@ def test_pixi_normalizes_single_equals_for_pip_pins(tmp_path: Path) -> None:
     assert data["pypi-dependencies"]["pygsti"] == "==0.9.13.3"
 
 
+def test_pixi_direct_url_pypi_dependency_uses_url_table(tmp_path: Path) -> None:
+    """Direct URL PyPI dependencies must use Pixi's table syntax."""
+    url = "https://files.pythonhosted.org/packages/example/pyqir.whl#sha256=abc"
+    req_file = _write_file(
+        tmp_path / "requirements.yaml",
+        f"""\
+        dependencies:
+          - pip: pyqir @ {url}:linux64
+        platforms:
+          - linux-64
+          - osx-arm64
+        """,
+    )
+
+    data = _generate_and_load(
+        tmp_path / "pixi.toml",
+        req_file,
+    )
+
+    assert data["target"]["linux-64"]["pypi-dependencies"]["pyqir"] == {
+        "url": url,
+    }
+    assert "osx-arm64" not in data.get("target", {})
+
+
 def test_pixi_prefers_pip_pin_over_unpinned_conda(tmp_path: Path) -> None:
     """Pinned pip spec should override unpinned conda spec."""
     req_file = _write_file(
