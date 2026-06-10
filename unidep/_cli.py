@@ -34,6 +34,7 @@ from unidep._dependencies_parsing import (
     parse_local_dependencies,
     parse_requirements,
 )
+from unidep._doctor import run_doctor_command
 from unidep._pixi import generate_pixi_toml
 from unidep._setuptools_integration import (
     filter_python_dependencies,
@@ -739,8 +740,33 @@ def _parse_args() -> argparse.Namespace:  # noqa: PLR0915
             help="The separator between the dependencies, by default ` `",
         )
 
+    # Subparser for the 'doctor' command
+    parser_doctor = subparsers.add_parser(
+        "doctor",
+        help="Diagnose common Python and Conda environment issues.",
+        description=(
+            "Run read-only diagnostics for common Python and Conda environment "
+            "issues, including stacked environments, shell startup conflicts "
+            "such as stale Conda/Mamba install roots, interpreter/environment "
+            "mismatches, Homebrew Python inside Conda environments, and PATH "
+            "shadowing for environment tools with version context. Also check "
+            "project local dependencies for uninitialized Git submodules."
+        ),
+        formatter_class=_HelpFormatter,
+    )
+    parser_doctor.add_argument(
+        "--json",
+        action="store_true",
+        help="Print machine-readable JSON instead of terminal-formatted text.",
+    )
+    parser_doctor.add_argument(
+        "--strict",
+        action="store_true",
+        help="Exit with status 1 when warnings are found.",
+    )
+
     # Subparser for the 'version' command
-    parser_merge = subparsers.add_parser(
+    subparsers.add_parser(
         "version",
         help="Print version information of unidep.",
         formatter_class=_HelpFormatter,
@@ -1167,7 +1193,10 @@ def _conda_dependencies_with_required_pip(
     dependencies = cast("list[str]", list(conda_dependencies))
     needs_pip = has_pip_dependencies or has_local_install_targets
     if needs_pip and not skip_conda and conda_executable:
-        has_pip = any(parse_package_str(pkg).name == "pip" for pkg in dependencies)
+        has_pip = any(
+            isinstance(pkg, str) and parse_package_str(pkg).name == "pip"
+            for pkg in dependencies
+        )
         if not has_pip:
             dependencies.append("pip")
     return dependencies
@@ -1682,12 +1711,19 @@ def _pip_compile_command(
     print(f"✅ Generated `{output_file}`.")
 
 
-def _check_conda_prefix() -> None:  # pragma: no cover
+def _check_conda_prefix() -> None:
     """Check if sys.executable is in the $CONDA_PREFIX."""
     if "CONDA_PREFIX" not in os.environ:
         return
-    conda_prefix = os.environ["CONDA_PREFIX"]
-    if sys.executable.startswith(str(conda_prefix)):
+    conda_prefix = Path(os.environ["CONDA_PREFIX"])
+    python_executable = Path(sys.executable)
+    prefix = os.path.normcase(os.fspath(conda_prefix.expanduser().absolute()))
+    executable = os.path.normcase(os.fspath(python_executable.expanduser().absolute()))
+    try:
+        python_is_inside_prefix = os.path.commonpath([prefix, executable]) == prefix
+    except ValueError:
+        python_is_inside_prefix = False
+    if python_is_inside_prefix:
         return
     msg = (
         "UniDep should be run from the current Conda environment for correct"
@@ -1926,5 +1962,12 @@ def main() -> None:  # noqa: PLR0912
             extra_flags=args.extra_flags,
             output_file=args.output_file,
         )
+    elif args.command == "doctor":  # pragma: no cover
+        exit_code = run_doctor_command(
+            output_format="json" if args.json else "text",
+            strict=args.strict,
+        )
+        if exit_code:
+            sys.exit(exit_code)
     elif args.command == "version":  # pragma: no cover
         _print_versions()

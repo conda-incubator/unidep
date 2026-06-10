@@ -24,8 +24,10 @@ except ImportError:  # pragma: no cover
 from unidep._cli import (
     CondaExecutable,
     _capitalize_dir,
+    _check_conda_prefix,
     _collect_available_optional_dependency_groups,
     _collect_selected_conda_like_platforms,
+    _conda_dependencies_with_required_pip,
     _conda_env_list,
     _conda_info,
     _conda_root_prefix,
@@ -42,6 +44,7 @@ from unidep._cli import (
     _pip_compile_command,
     _pip_subcommand,
     _print_versions,
+    main,
 )
 from unidep._dependencies_parsing import parse_requirements
 
@@ -242,6 +245,67 @@ def test_install_command_does_not_install_pip_without_pip_operations(
     )
     assert "Installing pip dependencies" not in output
     assert "Installing project with" not in output
+
+
+def test_install_command_installs_pip_when_local_project_needs_pip(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "setup.py").write_text("from setuptools import setup\nsetup()\n")
+    (project / "requirements.yaml").write_text(
+        textwrap.dedent(
+            """\
+            channels:
+              - conda-forge
+            dependencies:
+              - conda: zlib
+            """,
+        ),
+    )
+
+    with patch("unidep._cli._get_conda_executable", return_value="micromamba"), patch(
+        "unidep._cli._maybe_create_conda_env_args",
+        return_value=["--name", "new-env"],
+    ), patch(
+        "unidep._cli._python_executable",
+        return_value="/opt/micromamba/envs/new-env/bin/python",
+    ):
+        _install_command(
+            project,
+            conda_executable="micromamba",
+            conda_env_name="new-env",
+            conda_env_prefix=None,
+            conda_lock_file=None,
+            dry_run=True,
+            editable=False,
+            no_uv=True,
+            verbose=False,
+        )
+
+    output = capsys.readouterr().out
+    assert re.search(
+        r"Installing conda dependencies with `.*install --yes --override-channels "
+        r"--channel conda-forge --name new-env zlib pip`",
+        output,
+    )
+    assert re.search(
+        r"Installing project with `.*run --name new-env "
+        r"/opt/micromamba/envs/new-env/bin/python -m pip install --no-deps "
+        rf"{re.escape(str(project))}`",
+        output,
+    )
+
+
+def test_conda_dependencies_with_required_pip_handles_selector_dependencies() -> None:
+    assert _conda_dependencies_with_required_pip(
+        [{"sel(linux)": "zlib"}, "pip >=25"],
+        has_pip_dependencies=True,
+        has_local_install_targets=False,
+        skip_conda=False,
+        conda_executable="micromamba",
+    ) == [{"sel(linux)": "zlib"}, "pip >=25"]
 
 
 def test_install_command_deduplicates_shared_local_dependencies(
@@ -1202,6 +1266,28 @@ def test_version(capsys: pytest.CaptureFixture) -> None:
     assert "packaging" in captured.out
 
 
+def test_doctor_cli_dispatches(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sys, "argv", ["unidep", "doctor"])
+    with patch("unidep._cli.run_doctor_command", return_value=0) as doctor:
+        main()
+
+    doctor.assert_called_once_with(output_format="text", strict=False)
+
+
+def test_doctor_cli_dispatches_options_and_exit_code(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(sys, "argv", ["unidep", "doctor", "--json", "--strict"])
+    with patch(
+        "unidep._cli.run_doctor_command",
+        return_value=5,
+    ) as doctor, pytest.raises(SystemExit) as excinfo:
+        main()
+
+    assert excinfo.value.code == 5
+    doctor.assert_called_once_with(output_format="json", strict=True)
+
+
 def test_conda_env_list() -> None:
     conda_executable = _identify_conda_executable()
     _conda_env_list(conda_executable)
@@ -1223,6 +1309,69 @@ def test_conda_root_prefix_uses_conda_info_when_env_vars_are_unset(
         conda_cli_command_json.assert_called_once_with("conda", "info")
     finally:
         _conda_info.cache_clear()
+
+
+def test_check_conda_prefix_allows_missing_conda_prefix(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CONDA_PREFIX", raising=False)
+    monkeypatch.setattr(sys, "executable", "/opt/python/bin/python")
+
+    _check_conda_prefix()
+
+
+def test_check_conda_prefix_allows_python_inside_conda_prefix(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prefix = tmp_path / "env"
+    python = prefix / "bin" / "python"
+    monkeypatch.setenv("CONDA_PREFIX", str(prefix))
+    monkeypatch.setattr(sys, "executable", str(python))
+
+    _check_conda_prefix()
+
+
+def test_check_conda_prefix_rejects_sibling_prefix(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prefix = tmp_path / "env"
+    python = tmp_path / "env-old" / "bin" / "python"
+    monkeypatch.setenv("CONDA_PREFIX", str(prefix))
+    monkeypatch.setattr(sys, "executable", str(python))
+
+    with pytest.warns(
+        UserWarning,
+        match="not in the active Conda environment",
+    ), pytest.raises(SystemExit) as excinfo:
+        _check_conda_prefix()
+
+    assert excinfo.value.code == 1
+
+
+def test_check_conda_prefix_rejects_uncomparable_paths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    prefix = tmp_path / "env"
+    python = tmp_path / "outside" / "bin" / "python"
+    monkeypatch.setenv("CONDA_PREFIX", str(prefix))
+    monkeypatch.setattr(sys, "executable", str(python))
+
+    def commonpath(_paths: list[str]) -> str:
+        msg = "paths are on different drives"
+        raise ValueError(msg)
+
+    monkeypatch.setattr("unidep._cli.os.path.commonpath", commonpath)
+
+    with pytest.warns(
+        UserWarning,
+        match="not in the active Conda environment",
+    ), pytest.raises(SystemExit) as excinfo:
+        _check_conda_prefix()
+
+    assert excinfo.value.code == 1
 
 
 @pytest.mark.parametrize(
