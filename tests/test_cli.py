@@ -16,6 +16,9 @@ from unittest.mock import patch
 
 import pytest
 
+if TYPE_CHECKING:
+    from collections.abc import Generator
+
 try:
     import tomllib
 except ImportError:  # pragma: no cover
@@ -43,15 +46,14 @@ from unidep._cli import (
     _merge_command,
     _merge_optional_dependency_extras,
     _pip_compile_command,
+    _pip_install_local_arguments,
     _pip_subcommand,
     _print_versions,
     _print_with_rich,
     main,
 )
 from unidep._dependencies_parsing import parse_requirements
-
-if TYPE_CHECKING:
-    from collections.abc import Generator
+from unidep._setuptools_integration import _deps
 
 REPO_ROOT = Path(__file__).parent.parent
 
@@ -397,6 +399,197 @@ def test_install_command_deduplicates_shared_local_dependencies(
     pkgs = " ".join([f"-e {p}" for p in sorted((project1, project2, shared))])
     assert f"pip install --no-deps {pkgs}`" in captured.out
     assert captured.out.count(f"-e {shared}") == 1
+
+
+def test_pip_install_local_arguments_formats_paths() -> None:
+    prefix = ".\\" if os.name == "nt" else "./"
+
+    assert _pip_install_local_arguments(
+        [Path("local_project")],
+        editable=True,
+    ) == ["-e", f"{prefix}local_project"]
+    assert _pip_install_local_arguments(
+        [Path("local_project")],
+        editable=False,
+    ) == [f"{prefix}local_project"]
+    assert _pip_install_local_arguments(
+        [Path("package.whl")],
+        editable=True,
+    ) == [f"{prefix}package.whl"]
+
+
+def _write_editable_install_order_pyproject(
+    project: Path,
+    *,
+    name: str,
+    unidep_config: str = "",
+) -> None:
+    project.mkdir()
+    package_dir = project / name.replace("-", "_")
+    package_dir.mkdir()
+    (package_dir / "__init__.py").write_text("")
+    if not unidep_config:
+        unidep_config = """
+            [tool.unidep]
+            dependencies = []
+        """
+    (project / "pyproject.toml").write_text(
+        textwrap.dedent(
+            f"""\
+            [build-system]
+            requires = ["setuptools"]
+            build-backend = "setuptools.build_meta"
+
+            [project]
+            name = "{name}"
+            version = "0.1.0"
+            {unidep_config}
+            """,
+        ),
+    )
+
+
+@patch("unidep._cli._maybe_conda_executable")
+@patch("unidep._cli._use_uv")
+def test_uv_editable_install_includes_local_deps_in_pip_resolution_phase(
+    mock_use_uv: Any,
+    mock_conda: Any,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mock_use_uv.return_value = True
+    mock_conda.return_value = None
+    monkeypatch.setenv("PRIVATE_INDEX_TOKEN", "secret-token")
+    app = tmp_path / "app"
+    lib = tmp_path / "lib"
+    _write_editable_install_order_pyproject(lib, name="example-lib")
+    _write_editable_install_order_pyproject(
+        app,
+        name="example-app",
+        unidep_config="""
+            [tool.unidep]
+            dependencies = [
+                { pip = "private-package" },
+            ]
+            pip_indices = [
+                "https://pypi.org/simple/",
+                "https://${PRIVATE_INDEX_TOKEN}@private.example/simple/",
+            ]
+            local_dependencies = [
+                { local = "../lib", pypi = "example-lib" },
+            ]
+        """,
+    )
+
+    _install_command(
+        app,
+        conda_executable=None,
+        conda_env_name=None,
+        conda_env_prefix=None,
+        conda_lock_file=None,
+        dry_run=True,
+        editable=True,
+        skip_conda=True,
+        no_uv=False,
+        verbose=False,
+    )
+
+    output = capsys.readouterr().out
+    commands = re.findall(r"with `([^`]+)`", output)
+    pip_dependency_commands = [
+        cmd for cmd in commands if "uv pip install" in cmd and "private-package" in cmd
+    ]
+    assert len(pip_dependency_commands) == 1
+    pip_dependency_command = pip_dependency_commands[0]
+    assert f"-e {lib}" in pip_dependency_command
+    assert "example-lib" not in pip_dependency_command
+    assert "secret-token" not in output
+
+    final_local_install_commands = [
+        cmd for cmd in commands if "uv pip install" in cmd and f"-e {app}" in cmd
+    ]
+    assert len(final_local_install_commands) == 1
+    final_local_install_command = final_local_install_commands[0]
+    assert "--no-deps" in final_local_install_command
+    assert f"-e {lib}" in final_local_install_command
+
+
+@patch("unidep._cli._maybe_conda_executable")
+@patch("unidep._cli._use_uv")
+def test_uv_editable_install_all_keeps_discovered_local_deps_in_pip_phase(
+    mock_use_uv: Any,
+    mock_conda: Any,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    mock_use_uv.return_value = True
+    mock_conda.return_value = None
+    app = tmp_path / "app"
+    lib = tmp_path / "lib"
+    _write_editable_install_order_pyproject(lib, name="example-lib")
+    _write_editable_install_order_pyproject(
+        app,
+        name="example-app",
+        unidep_config="""
+            [tool.unidep]
+            dependencies = [
+                { pip = "private-package" },
+            ]
+            local_dependencies = [
+                { local = "../lib", pypi = "example-lib" },
+            ]
+        """,
+    )
+
+    _install_command(
+        app,
+        lib,
+        conda_executable=None,
+        conda_env_name=None,
+        conda_env_prefix=None,
+        conda_lock_file=None,
+        dry_run=True,
+        editable=True,
+        skip_conda=True,
+        no_uv=False,
+        verbose=False,
+    )
+
+    output = capsys.readouterr().out
+    commands = re.findall(r"with `([^`]+)`", output)
+    pip_dependency_commands = [
+        cmd for cmd in commands if "uv pip install" in cmd and "private-package" in cmd
+    ]
+    assert len(pip_dependency_commands) == 1
+    assert f"-e {lib}" in pip_dependency_commands[0]
+    assert "example-lib" not in pip_dependency_commands[0]
+
+
+def test_skip_local_deps_env_uses_pypi_fallback_for_metadata(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = tmp_path / "app"
+    lib = tmp_path / "lib"
+    _write_editable_install_order_pyproject(lib, name="example-lib")
+    _write_editable_install_order_pyproject(
+        app,
+        name="example-app",
+        unidep_config="""
+            [tool.unidep]
+            local_dependencies = [
+                { local = "../lib", pypi = "example-lib" },
+            ]
+        """,
+    )
+
+    monkeypatch.setenv("UNIDEP_SKIP_LOCAL_DEPS", "1")
+
+    deps = _deps(app / "pyproject.toml")
+
+    assert "example-lib" in deps.dependencies
+    assert not any("file://" in dependency for dependency in deps.dependencies)
 
 
 def mock_uv_env(tmp_path: Path) -> dict[str, str]:
