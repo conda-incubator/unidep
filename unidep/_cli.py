@@ -1116,6 +1116,28 @@ def _run_with_redacted_command(command: Sequence[str | Path]) -> None:
         raise
 
 
+def _pip_install_local_arguments(
+    folders: Sequence[str | Path],
+    *,
+    editable: bool,
+) -> list[str]:
+    args: list[str] = []
+    for folder in sorted(folders):
+        if not os.path.isabs(folder):  # noqa: PTH117
+            relative_prefix = ".\\" if os.name == "nt" else "./"
+            folder = f"{relative_prefix}{folder}"  # noqa: PLW2901
+
+        if (
+            editable
+            and not str(folder).endswith(".whl")
+            and not str(folder).endswith(".zip")
+        ):
+            args.extend(["-e", str(folder)])
+        else:
+            args.append(str(folder))
+    return args
+
+
 def _pip_install_local(
     *folders: str | Path,
     editable: bool,
@@ -1150,19 +1172,7 @@ def _pip_install_local(
     if flags:
         pip_command.extend(flags)
 
-    for folder in sorted(folders):
-        if not os.path.isabs(folder):  # noqa: PTH117
-            relative_prefix = ".\\" if os.name == "nt" else "./"
-            folder = f"{relative_prefix}{folder}"  # noqa: PLW2901
-
-        if (
-            editable
-            and not str(folder).endswith(".whl")
-            and not str(folder).endswith(".zip")
-        ):
-            pip_command.extend(["-e", str(folder)])
-        else:
-            pip_command.append(str(folder))
+    pip_command.extend(_pip_install_local_arguments(folders, editable=editable))
 
     print_phase("Installing project")
     print_command("Installing project", format_command_for_display(pip_command))
@@ -1174,7 +1184,7 @@ def _collect_installable_local_paths(
     paths_with_extras: Sequence[PathWithExtras],
     *,
     verbose: bool,
-) -> list[Path]:
+) -> tuple[list[Path], list[Path]]:
     installable: list[Path] = []
     for file in paths_with_extras:
         if is_pip_installable(file.path.parent):
@@ -1194,15 +1204,20 @@ def _collect_installable_local_paths(
     print(f"📝 Found local dependencies: {names}\n")
 
     installable_set = {p.resolve() for p in installable}
+    local_dependency_installable: list[Path] = []
+    local_dependency_installable_set: set[Path] = set()
     for deps in local_dependencies.values():
         for dep in deps:
             resolved_dep = dep.resolve()
+            if resolved_dep not in local_dependency_installable_set:
+                local_dependency_installable_set.add(resolved_dep)
+                local_dependency_installable.append(dep)
             if resolved_dep in installable_set:
                 continue
             installable_set.add(resolved_dep)
             installable.append(dep)
 
-    return installable
+    return installable, local_dependency_installable
 
 
 def _conda_dependencies_with_required_pip(
@@ -1283,11 +1298,14 @@ def _install_command(  # noqa: PLR0912, PLR0915
         skip_pip = True
         skip_conda = True
 
-    installable = (
-        _collect_installable_local_paths(paths_with_extras, verbose=verbose)
-        if not skip_local
-        else []
-    )
+    if not skip_local:
+        installable, local_dependency_installable = _collect_installable_local_paths(
+            paths_with_extras,
+            verbose=verbose,
+        )
+    else:
+        installable = []
+        local_dependency_installable = []
     conda_dependencies = _conda_dependencies_with_required_pip(
         env_spec.conda,
         has_pip_dependencies=bool(env_spec.pip) and not skip_pip,
@@ -1332,7 +1350,12 @@ def _install_command(  # noqa: PLR0912, PLR0915
     if env_spec.pip and not skip_pip:
         conda_run = _maybe_conda_run(conda_executable, conda_env_name, conda_env_prefix)
         index_args = build_pip_index_arguments(env_spec.pip_indices)
-        if _use_uv(no_uv):
+        use_uv = _use_uv(no_uv)
+        local_dependency_args = _pip_install_local_arguments(
+            local_dependency_installable if use_uv and editable else [],
+            editable=True,
+        )
+        if use_uv:
             pip_command = [
                 *conda_run,
                 "uv",
@@ -1341,6 +1364,7 @@ def _install_command(  # noqa: PLR0912, PLR0915
                 "--python",
                 python_executable,
                 *index_args,
+                *local_dependency_args,
                 *env_spec.pip,
             ]
         else:
