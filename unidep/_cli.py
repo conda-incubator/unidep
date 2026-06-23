@@ -20,6 +20,7 @@ import time
 from importlib import resources as importlib_resources
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
+from urllib.parse import urlsplit, urlunsplit
 
 from ruamel.yaml import YAML
 
@@ -1122,6 +1123,25 @@ def _build_pip_index_arguments(pip_indices: Sequence[str]) -> list[str]:
     return args
 
 
+def _redact_url_credentials(value: str) -> str:
+    try:
+        parsed = urlsplit(value)
+    except ValueError:
+        return value
+    if parsed.scheme not in {"http", "https"} or "@" not in parsed.netloc:
+        return value
+    _userinfo, host = parsed.netloc.rsplit("@", 1)
+    if not host:
+        return value
+    return urlunsplit(
+        (parsed.scheme, f"***@{host}", parsed.path, parsed.query, parsed.fragment),
+    )
+
+
+def _format_command_for_display(command: Sequence[str | Path]) -> str:
+    return " ".join(_redact_url_credentials(str(part)) for part in command)
+
+
 def _pip_install_local(
     *folders: str | Path,
     editable: bool,
@@ -1170,7 +1190,7 @@ def _pip_install_local(
         else:
             pip_command.append(str(folder))
 
-    print(f"📦 Installing project with `{' '.join(pip_command)}`\n")
+    print(f"📦 Installing project with `{_format_command_for_display(pip_command)}`\n")
     if not dry_run:
         subprocess.run(pip_command, check=True)
 
@@ -1354,7 +1374,10 @@ def _install_command(  # noqa: PLR0912
                 *index_args,
                 *env_spec.pip,
             ]
-        print(f"📦 Installing pip dependencies with `{' '.join(pip_command)}`\n")
+        print(
+            f"📦 Installing pip dependencies with "
+            f"`{_format_command_for_display(pip_command)}`\n",
+        )
         if not dry_run:  # pragma: no cover
             subprocess.run(pip_command, check=True)
 
