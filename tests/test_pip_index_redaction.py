@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
+import subprocess
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from unidep._cli import _install_command, _pip_install_local
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-    import pytest
 
 
 def test_pip_install_local_print_redacts_index_credentials(
@@ -41,6 +42,36 @@ def test_pip_install_local_print_redacts_index_credentials(
         "https://token:synthetic-token@private.example.com/simple/"
         in run.call_args[0][0]
     )
+
+
+def test_pip_install_local_error_redacts_index_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PRIVATE_REPO_TOKEN", "synthetic-token")
+    index_url = "https://token:synthetic-token@private.example.com/simple/"
+
+    with patch(
+        "unidep._cli.subprocess.run",
+        side_effect=subprocess.CalledProcessError(
+            1,
+            ["/usr/bin/python", "-m", "pip", "install", "--index-url", index_url],
+        ),
+    ), pytest.raises(subprocess.CalledProcessError) as exc_info:
+        _pip_install_local(
+            "test_package",
+            editable=False,
+            dry_run=False,
+            python_executable="/usr/bin/python",
+            conda_run=[],
+            no_uv=True,
+            pip_indices=[
+                "https://token:${PRIVATE_REPO_TOKEN}@private.example.com/simple/",
+            ],
+            flags=None,
+        )
+
+    assert "synthetic-token" not in str(exc_info.value)
+    assert "https://***@private.example.com/simple/" in str(exc_info.value)
 
 
 def test_install_command_print_redacts_index_credentials(
@@ -87,3 +118,47 @@ dependencies:
         "https://token:synthetic-token@private.example.com/simple/"
         in run.call_args[0][0]
     )
+
+
+def test_install_command_error_redacts_index_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("PRIVATE_REPO_TOKEN", "synthetic-token")
+    index_url = "https://token:synthetic-token@private.example.com/simple/"
+    req_file = tmp_path / "requirements.yaml"
+    req_file.write_text(
+        """\
+name: test_project
+pip_indices:
+  - https://token:${PRIVATE_REPO_TOKEN}@private.example.com/simple/
+dependencies:
+  - pip: private-package
+""",
+    )
+
+    with patch("unidep._cli._maybe_conda_executable", return_value=None), patch(
+        "unidep._cli.subprocess.run",
+        side_effect=subprocess.CalledProcessError(
+            1,
+            ["/usr/bin/python", "-m", "pip", "install", "--index-url", index_url],
+        ),
+    ), pytest.raises(subprocess.CalledProcessError) as exc_info:
+        _install_command(
+            req_file,
+            conda_executable=None,
+            conda_env_name=None,
+            conda_env_prefix=None,
+            conda_lock_file=None,
+            dry_run=False,
+            editable=False,
+            skip_local=True,
+            skip_pip=False,
+            skip_conda=True,
+            no_dependencies=False,
+            no_uv=True,
+            verbose=False,
+        )
+
+    assert "synthetic-token" not in str(exc_info.value)
+    assert "https://***@private.example.com/simple/" in str(exc_info.value)

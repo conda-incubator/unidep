@@ -207,6 +207,52 @@ def test_conda_lock_command_pip_and_conda_different_name(
     assert "Missing keys" not in capsys.readouterr().out
 
 
+def _write_private_index_project(
+    project: Path,
+    dependencies: str,
+    *,
+    auth_value: str = "${PRIVATE_REPO_TOKEN}",
+    local_dependencies: str = "",
+) -> Path:
+    pyproject = project / "pyproject.toml"
+    local_block = (
+        f"\nlocal_dependencies = [\n{local_dependencies}]\n"
+        if local_dependencies
+        else ""
+    )
+    pyproject.write_text(
+        f"""\
+[tool.unidep]
+dependencies = [
+{dependencies}]
+pip_indices = [
+    "https://token:{auth_value}@private.example.com/simple/",
+    "https://pypi.org/simple/",
+]{local_block}
+""",
+    )
+    return pyproject
+
+
+def _write_fake_lock_file(
+    conda_lock_output: Path,
+    packages: list[dict[str, object]],
+) -> None:
+    yaml = YAML(typ="rt")
+    with conda_lock_output.open("w") as fp:
+        yaml.dump(
+            {
+                "version": 1,
+                "metadata": {
+                    "channels": [{"url": "conda-forge"}],
+                    "platforms": ["linux-64"],
+                },
+                "package": packages,
+            },
+            fp,
+        )
+
+
 def test_conda_lock_skipped_private_pip_deps_are_not_reported_missing(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
@@ -221,22 +267,15 @@ def test_conda_lock_skipped_private_pip_deps_are_not_reported_missing(
 dependencies = []
 """,
     )
-    app.joinpath("pyproject.toml").write_text(
+    _write_private_index_project(
+        app,
         """\
-[tool.unidep]
-dependencies = [
     { pip = "private-config" },
     { pip = "private-runtime" },
     { pip = "public-helper" },
-]
-pip_indices = [
-    "https://token:fixed@private.example.com/simple/",
-    "https://pypi.org/simple/",
-]
-local_dependencies = [
-    { local = "../core_pkg", pypi = "core-pkg" },
-]
 """,
+        auth_value="fixed",
+        local_dependencies='    { local = "../core_pkg", pypi = "core-pkg" },\n',
     )
 
     def fake_run_conda_lock(
@@ -247,27 +286,18 @@ local_dependencies = [
         extra_flags: list[str],
     ) -> None:
         del check_input_hash, extra_flags
-        yaml = YAML(typ="rt")
-        with conda_lock_output.open("w") as fp:
-            yaml.dump(
+        _write_fake_lock_file(
+            conda_lock_output,
+            [
                 {
-                    "version": 1,
-                    "metadata": {
-                        "channels": [{"url": "conda-forge"}],
-                        "platforms": ["linux-64"],
-                    },
-                    "package": [
-                        {
-                            "name": "public-helper",
-                            "manager": "pip",
-                            "platform": "linux-64",
-                            "version": "1.0.0",
-                            "dependencies": {},
-                        },
-                    ],
+                    "name": "public-helper",
+                    "manager": "pip",
+                    "platform": "linux-64",
+                    "version": "1.0.0",
+                    "dependencies": {},
                 },
-                fp,
-            )
+            ],
+        )
 
     with patch("unidep._conda_lock._run_conda_lock", side_effect=fake_run_conda_lock):
         conda_lock_command(
@@ -295,17 +325,10 @@ def test_conda_lock_fails_before_lock_when_pip_index_env_var_is_unset(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("PRIVATE_REPO_TOKEN", raising=False)
-    req_file = tmp_path / "pyproject.toml"
-    req_file.write_text(
+    req_file = _write_private_index_project(
+        tmp_path,
         """\
-[tool.unidep]
-dependencies = [
     { pip = "private-runtime" },
-]
-pip_indices = [
-    "https://token:${PRIVATE_REPO_TOKEN}@private.example.com/simple/",
-    "https://pypi.org/simple/",
-]
 """,
     )
 
@@ -335,17 +358,10 @@ def test_conda_lock_preserves_pip_index_env_var_in_temp_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("PRIVATE_REPO_TOKEN", "synthetic-token")
-    req_file = tmp_path / "pyproject.toml"
-    req_file.write_text(
+    req_file = _write_private_index_project(
+        tmp_path,
         """\
-[tool.unidep]
-dependencies = [
     { pip = "private-runtime" },
-]
-pip_indices = [
-    "https://token:${PRIVATE_REPO_TOKEN}@private.example.com/simple/",
-    "https://pypi.org/simple/",
-]
 """,
     )
 
@@ -360,19 +376,7 @@ pip_indices = [
         tmp_env_content = tmp_env.read_text()
         assert "${PRIVATE_REPO_TOKEN}" in tmp_env_content
         assert "synthetic-token" not in tmp_env_content
-        yaml = YAML(typ="rt")
-        with conda_lock_output.open("w") as fp:
-            yaml.dump(
-                {
-                    "version": 1,
-                    "metadata": {
-                        "channels": [{"url": "conda-forge"}],
-                        "platforms": ["linux-64"],
-                    },
-                    "package": [],
-                },
-                fp,
-            )
+        _write_fake_lock_file(conda_lock_output, [])
 
     with patch("unidep._conda_lock._run_conda_lock", side_effect=fake_run_conda_lock):
         conda_lock_command(

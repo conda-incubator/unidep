@@ -1142,6 +1142,24 @@ def _format_command_for_display(command: Sequence[str | Path]) -> str:
     return " ".join(_redact_url_credentials(str(part)) for part in command)
 
 
+def _redact_command_for_exception(command: object) -> object:
+    if isinstance(command, str):
+        return _redact_url_credentials(command)
+    if isinstance(command, list):
+        return [_redact_url_credentials(str(part)) for part in command]
+    if isinstance(command, tuple):
+        return tuple(_redact_url_credentials(str(part)) for part in command)
+    return command
+
+
+def _run_with_redacted_command(command: Sequence[str | Path]) -> None:
+    try:
+        subprocess.run(command, check=True)
+    except subprocess.CalledProcessError as exc:
+        exc.cmd = _redact_command_for_exception(exc.cmd)
+        raise
+
+
 def _pip_install_local(
     *folders: str | Path,
     editable: bool,
@@ -1192,7 +1210,7 @@ def _pip_install_local(
 
     print(f"📦 Installing project with `{_format_command_for_display(pip_command)}`\n")
     if not dry_run:
-        subprocess.run(pip_command, check=True)
+        _run_with_redacted_command(pip_command)
 
 
 def _collect_installable_local_paths(
@@ -1379,7 +1397,7 @@ def _install_command(  # noqa: PLR0912
             f"`{_format_command_for_display(pip_command)}`\n",
         )
         if not dry_run:  # pragma: no cover
-            subprocess.run(pip_command, check=True)
+            _run_with_redacted_command(pip_command)
 
     if installable:
         pip_flags = ["--no-deps"]  # we just ran pip/conda install, so skip
