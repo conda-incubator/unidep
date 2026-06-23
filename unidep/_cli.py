@@ -1360,6 +1360,9 @@ def _install_command(  # noqa: PLR0912, PLR0915
         conda_run = _maybe_conda_run(conda_executable, conda_env_name, conda_env_prefix)
         index_args = build_pip_index_arguments(env_spec.pip_indices)
         use_uv = _use_uv(no_uv)
+        # uv resolves the whole command up front. Local dependencies must be
+        # direct requirements here; the later --no-deps editable install is too
+        # late to satisfy transitive requirements from private index packages.
         local_dependency_args = _pip_install_local_arguments(
             local_paths.dependency_paths if use_uv and editable else [],
             editable=True,

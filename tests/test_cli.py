@@ -451,7 +451,7 @@ def _write_editable_install_order_pyproject(
 
 @patch("unidep._cli._maybe_conda_executable")
 @patch("unidep._cli._use_uv")
-def test_uv_editable_install_includes_local_deps_in_pip_resolution_phase(
+def test_uv_editable_install_passes_local_deps_as_direct_requirements(
     mock_use_uv: Any,
     mock_conda: Any,
     tmp_path: Path,
@@ -497,6 +497,8 @@ def test_uv_editable_install_includes_local_deps_in_pip_resolution_phase(
 
     output = capsys.readouterr().out
     commands = re.findall(r"with `([^`]+)`", output)
+    # Regression: uv can only resolve against requirements in this command.
+    # The local package must be present here, not only in the final no-deps phase.
     pip_dependency_commands = [
         cmd for cmd in commands if "uv pip install" in cmd and "private-package" in cmd
     ]
@@ -517,7 +519,7 @@ def test_uv_editable_install_includes_local_deps_in_pip_resolution_phase(
 
 @patch("unidep._cli._maybe_conda_executable")
 @patch("unidep._cli._use_uv")
-def test_uv_editable_install_all_keeps_discovered_local_deps_in_pip_phase(
+def test_uv_editable_install_all_passes_local_deps_as_direct_requirements(
     mock_use_uv: Any,
     mock_conda: Any,
     tmp_path: Path,
