@@ -8,22 +8,22 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from unidep._cli import _build_pip_index_arguments
 from unidep._conda_env import create_conda_env_specification
+from unidep._pip_indices import build_pip_index_arguments
 
 
 class TestBuildPipIndexArguments:
-    """Test the _build_pip_index_arguments function."""
+    """Test the build_pip_index_arguments function."""
 
     def test_empty_indices(self) -> None:
         """Test with empty pip_indices list."""
-        args = _build_pip_index_arguments([])
+        args = build_pip_index_arguments([])
         assert args == []
 
     def test_single_index(self) -> None:
         """Test with a single index URL."""
         indices = ["https://pypi.org/simple/"]
-        args = _build_pip_index_arguments(indices)
+        args = build_pip_index_arguments(indices)
         assert args == ["--index-url", "https://pypi.org/simple/"]
 
     def test_multiple_indices(self) -> None:
@@ -33,7 +33,7 @@ class TestBuildPipIndexArguments:
             "https://test.pypi.org/simple/",
             "https://private.com/simple/",
         ]
-        args = _build_pip_index_arguments(indices)
+        args = build_pip_index_arguments(indices)
         assert args == [
             "--index-url",
             "https://pypi.org/simple/",
@@ -54,7 +54,7 @@ class TestBuildPipIndexArguments:
                 "https://${PIP_USER}:${PIP_PASSWORD}@private.com/simple/",
                 "https://public.com/simple/",
             ]
-            args = _build_pip_index_arguments(indices)
+            args = build_pip_index_arguments(indices)
 
             assert args == [
                 "--index-url",
@@ -80,7 +80,7 @@ class TestBuildPipIndexArguments:
             ValueError,
             match=r"NONEXISTENT_VAR.*pip_indices",
         ):
-            _build_pip_index_arguments(indices)
+            build_pip_index_arguments(indices)
 
     def test_complex_environment_variables(self) -> None:
         """Test complex environment variable patterns."""
@@ -92,7 +92,7 @@ class TestBuildPipIndexArguments:
                 "https://${DOMAIN}:${PORT}/simple/",
                 "https://backup.${DOMAIN}/simple/",
             ]
-            args = _build_pip_index_arguments(indices)
+            args = build_pip_index_arguments(indices)
 
             assert args == [
                 "--index-url",

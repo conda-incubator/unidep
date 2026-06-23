@@ -20,12 +20,10 @@ import time
 from importlib import resources as importlib_resources
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
-from urllib.parse import urlsplit, urlunsplit
 
 from ruamel.yaml import YAML
 
 from unidep._conda_env import (
-    _expand_and_validate_pip_indices,
     create_conda_env_specification,
     write_conda_environment_file,
 )
@@ -38,6 +36,11 @@ from unidep._dependencies_parsing import (
     parse_requirements,
 )
 from unidep._doctor import run_doctor_command
+from unidep._pip_indices import (
+    build_pip_index_arguments,
+    format_command_for_display,
+    redact_command_for_exception,
+)
 from unidep._pixi import generate_pixi_toml
 from unidep._setuptools_integration import (
     filter_python_dependencies,
@@ -1105,58 +1108,11 @@ def _use_uv(no_uv: bool) -> bool:  # noqa: FBT001
     return shutil.which("uv") is not None
 
 
-def _build_pip_index_arguments(pip_indices: Sequence[str]) -> list[str]:
-    """Build pip/uv index arguments from pip_indices list.
-
-    First index becomes --index-url (primary),
-    remaining indices become --extra-index-url (supplementary).
-    """
-    args = []
-    if pip_indices:
-        expanded_indices = _expand_and_validate_pip_indices(pip_indices)
-
-        # First index is primary
-        args.extend(["--index-url", expanded_indices[0]])
-        # Additional indices are extra
-        for index in expanded_indices[1:]:
-            args.extend(["--extra-index-url", index])
-    return args
-
-
-def _redact_url_credentials(value: str) -> str:
-    try:
-        parsed = urlsplit(value)
-    except ValueError:
-        return value
-    if parsed.scheme not in {"http", "https"} or "@" not in parsed.netloc:
-        return value
-    _userinfo, host = parsed.netloc.rsplit("@", 1)
-    if not host:
-        return value
-    return urlunsplit(
-        (parsed.scheme, f"***@{host}", parsed.path, parsed.query, parsed.fragment),
-    )
-
-
-def _format_command_for_display(command: Sequence[str | Path]) -> str:
-    return " ".join(_redact_url_credentials(str(part)) for part in command)
-
-
-def _redact_command_for_exception(command: object) -> object:
-    if isinstance(command, str):
-        return _redact_url_credentials(command)
-    if isinstance(command, list):
-        return [_redact_url_credentials(str(part)) for part in command]
-    if isinstance(command, tuple):
-        return tuple(_redact_url_credentials(str(part)) for part in command)
-    return command
-
-
 def _run_with_redacted_command(command: Sequence[str | Path]) -> None:
     try:
         subprocess.run(command, check=True)
     except subprocess.CalledProcessError as exc:
-        exc.cmd = _redact_command_for_exception(exc.cmd)
+        exc.cmd = redact_command_for_exception(exc.cmd)
         raise
 
 
@@ -1170,7 +1126,7 @@ def _pip_install_local(
     pip_indices: Sequence[str] | None = None,
     flags: list[str] | None = None,
 ) -> None:  # pragma: no cover
-    index_args = _build_pip_index_arguments(pip_indices or [])
+    index_args = build_pip_index_arguments(pip_indices or [])
     if _use_uv(no_uv):
         pip_command = [
             *conda_run,
@@ -1208,7 +1164,7 @@ def _pip_install_local(
         else:
             pip_command.append(str(folder))
 
-    print(f"📦 Installing project with `{_format_command_for_display(pip_command)}`\n")
+    print(f"📦 Installing project with `{format_command_for_display(pip_command)}`\n")
     if not dry_run:
         _run_with_redacted_command(pip_command)
 
@@ -1370,7 +1326,7 @@ def _install_command(  # noqa: PLR0912
     )
     if env_spec.pip and not skip_pip:
         conda_run = _maybe_conda_run(conda_executable, conda_env_name, conda_env_prefix)
-        index_args = _build_pip_index_arguments(env_spec.pip_indices)
+        index_args = build_pip_index_arguments(env_spec.pip_indices)
         if _use_uv(no_uv):
             pip_command = [
                 *conda_run,
@@ -1394,7 +1350,7 @@ def _install_command(  # noqa: PLR0912
             ]
         print(
             f"📦 Installing pip dependencies with "
-            f"`{_format_command_for_display(pip_command)}`\n",
+            f"`{format_command_for_display(pip_command)}`\n",
         )
         if not dry_run:  # pragma: no cover
             _run_with_redacted_command(pip_command)
