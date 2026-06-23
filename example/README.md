@@ -110,10 +110,13 @@ Using `unidep` for installation offers a more comprehensive approach. It handles
 $ unidep install --dry-run -e ./setup_py_project
 📝 Found local dependencies: {'setup_py_project': ['hatch_project', 'setuptools_project']}
 
+◆ Installing conda dependencies...
 📦 Installing conda dependencies with `conda install --yes --override-channels --channel conda-forge adaptive">=0.15.0, <2.0.0" adaptive-scheduler hpc05 pexpect pfapack numpy">=1.21" packaging pandas">=1,<3" pytest pytest-cov pip`
 
+◆ Installing pip dependencies...
 📦 Installing pip dependencies with `/opt/hostedtoolcache/Python/3.14.2/x64/bin/python -m pip install yaml2bib aiokef markdown-code-runner numthreads pyyaml rsync-time-machine slurm-usage unidep`
 
+◆ Installing project...
 📦 Installing project with `/opt/hostedtoolcache/Python/3.14.2/x64/bin/python -m pip install --no-deps -e /home/runner/work/unidep/unidep/example/hatch_project -e /home/runner/work/unidep/unidep/example/setuptools_project -e ./setup_py_project`
 
 ```
@@ -157,10 +160,13 @@ unidep install-all -e
 $ unidep install-all -e --dry-run
 📝 Found local dependencies: {'pyproject_toml_project': ['hatch_project'], 'setup_py_project': ['hatch_project', 'setuptools_project'], 'setuptools_project': ['hatch_project']}
 
+◆ Installing conda dependencies...
 📦 Installing conda dependencies with `conda install --yes --override-channels --channel conda-forge adaptive">=0.15.0, <2.0.0" adaptive-scheduler hpc05 pexpect pfapack numpy">=1.21" packaging pandas">=1,<3" pytest pytest-cov pip`
 
+◆ Installing pip dependencies...
 📦 Installing pip dependencies with `/opt/hostedtoolcache/Python/3.14.2/x64/bin/python -m pip install yaml2bib aiokef markdown-code-runner numthreads pyyaml rsync-time-machine slurm-usage unidep`
 
+◆ Installing project...
 📦 Installing project with `/opt/hostedtoolcache/Python/3.14.2/x64/bin/python -m pip install --no-deps -e ./hatch2_project -e ./hatch_project -e ./pyproject_toml_project -e ./setup_py_project -e ./setuptools_project`
 
 ```
