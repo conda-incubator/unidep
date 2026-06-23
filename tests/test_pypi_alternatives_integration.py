@@ -6,7 +6,7 @@ import shutil
 import textwrap
 from typing import TYPE_CHECKING
 
-from unidep._setuptools_integration import get_python_dependencies
+from unidep._setuptools_integration import _deps, get_python_dependencies
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -192,6 +192,56 @@ def test_setuptools_with_skip_local_deps_env_var(
     # Should not include local dependency
     assert not any("my-dep" in dep for dep in deps.dependencies)
     assert not any("file://" in dep for dep in deps.dependencies)
+
+
+def test_skip_local_deps_env_var_emits_pypi_fallback_for_wheel_metadata(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Build hooks should emit PyPI fallback names, not local refs."""
+    project = tmp_path / "main_pkg"
+    project.mkdir()
+    core = tmp_path / "core_pkg"
+    core.mkdir()
+    (core / "pyproject.toml").write_text(
+        textwrap.dedent(
+            """\
+            [project]
+            name = "core-pkg"
+            version = "0.1.0"
+
+            [tool.unidep]
+            dependencies = [
+                { pip = "core-helper" },
+            ]
+            """,
+        ),
+    )
+    (project / "pyproject.toml").write_text(
+        textwrap.dedent(
+            """\
+            [project]
+            name = "main-pkg"
+            version = "0.1.0"
+            dynamic = ["dependencies"]
+
+            [tool.unidep]
+            local_dependencies = [
+                { local = "../core_pkg", pypi = "core-pkg>=1.0" },
+            ]
+            """,
+        ),
+    )
+
+    monkeypatch.setenv("UNIDEP_SKIP_LOCAL_DEPS", "1")
+    metadata = "\n".join(
+        f"Requires-Dist: {dependency}"
+        for dependency in _deps(project / "pyproject.toml").dependencies
+    )
+
+    assert "Requires-Dist: core-pkg>=1.0" in metadata
+    assert "core-helper" not in metadata
+    assert "file://" not in metadata
 
 
 def test_use_skip_entries_are_ignored(tmp_path: Path) -> None:

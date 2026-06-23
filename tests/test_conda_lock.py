@@ -207,6 +207,129 @@ def test_conda_lock_command_pip_and_conda_different_name(
     assert "Missing keys" not in capsys.readouterr().out
 
 
+def test_conda_lock_skipped_private_pip_deps_are_not_reported_missing(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    app = tmp_path / "app_pkg"
+    core = tmp_path / "core_pkg"
+    app.mkdir()
+    core.mkdir()
+    core.joinpath("pyproject.toml").write_text(
+        """\
+[tool.unidep]
+dependencies = []
+""",
+    )
+    app.joinpath("pyproject.toml").write_text(
+        """\
+[tool.unidep]
+dependencies = [
+    { pip = "private-config" },
+    { pip = "private-runtime" },
+    { pip = "public-helper" },
+]
+pip_indices = [
+    "https://token:fixed@private.example.com/simple/",
+    "https://pypi.org/simple/",
+]
+local_dependencies = [
+    { local = "../core_pkg", pypi = "core-pkg" },
+]
+""",
+    )
+
+    def fake_run_conda_lock(
+        _tmp_env: Path,
+        conda_lock_output: Path,
+        *,
+        check_input_hash: bool,
+        extra_flags: list[str],
+    ) -> None:
+        del check_input_hash, extra_flags
+        yaml = YAML(typ="rt")
+        with conda_lock_output.open("w") as fp:
+            yaml.dump(
+                {
+                    "version": 1,
+                    "metadata": {
+                        "channels": [{"url": "conda-forge"}],
+                        "platforms": ["linux-64"],
+                    },
+                    "package": [
+                        {
+                            "name": "public-helper",
+                            "manager": "pip",
+                            "platform": "linux-64",
+                            "version": "1.0.0",
+                            "dependencies": {},
+                        },
+                    ],
+                },
+                fp,
+            )
+
+    with patch("unidep._conda_lock._run_conda_lock", side_effect=fake_run_conda_lock):
+        conda_lock_command(
+            depth=1,
+            directory=tmp_path,
+            files=None,
+            platforms=["linux-64"],
+            verbose=False,
+            only_global=False,
+            check_input_hash=False,
+            ignore_pins=[],
+            overwrite_pins=[],
+            skip_dependencies=["private-config", "private-runtime"],
+            extra_flags=[],
+        )
+
+    out = capsys.readouterr().out
+    assert "Missing keys" not in out
+    assert "private-config" not in out
+    assert "private-runtime" not in out
+
+
+def test_conda_lock_fails_before_lock_when_pip_index_env_var_is_unset(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("PRIVATE_REPO_TOKEN", raising=False)
+    req_file = tmp_path / "pyproject.toml"
+    req_file.write_text(
+        """\
+[tool.unidep]
+dependencies = [
+    { pip = "private-runtime" },
+]
+pip_indices = [
+    "https://token:${PRIVATE_REPO_TOKEN}@private.example.com/simple/",
+    "https://pypi.org/simple/",
+]
+""",
+    )
+
+    with (
+        patch("unidep._conda_lock._run_conda_lock") as run_conda_lock,
+        pytest.raises(ValueError, match=r"PRIVATE_REPO_TOKEN.*pip_indices"),
+    ):
+        conda_lock_command(
+            depth=1,
+            directory=tmp_path,
+            files=[req_file],
+            platforms=["linux-64"],
+            verbose=False,
+            only_global=True,
+            check_input_hash=False,
+            ignore_pins=[],
+            overwrite_pins=[],
+            skip_dependencies=[],
+            extra_flags=[],
+        )
+
+    run_conda_lock.assert_not_called()
+
+
 def test_remove_top_comments(tmp_path: Path) -> None:
     test_file = tmp_path / "test_file.txt"
     test_file.write_text(

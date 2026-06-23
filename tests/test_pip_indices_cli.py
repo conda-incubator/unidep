@@ -67,16 +67,20 @@ class TestBuildPipIndexArguments:
             del os.environ["PIP_USER"]
             del os.environ["PIP_PASSWORD"]
 
-    def test_missing_environment_variable(self) -> None:
+    def test_missing_environment_variable(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         """Test handling of missing environment variables."""
-        # Ensure the variable is not set
-        os.environ.pop("NONEXISTENT_VAR", None)
+        monkeypatch.delenv("NONEXISTENT_VAR", raising=False)
 
         indices = ["https://${NONEXISTENT_VAR}@private.com/simple/"]
-        args = _build_pip_index_arguments(indices)
 
-        # expandvars leaves the ${VAR} as-is if not found
-        assert args == ["--index-url", "https://${NONEXISTENT_VAR}@private.com/simple/"]
+        with pytest.raises(
+            ValueError,
+            match=r"NONEXISTENT_VAR.*pip_indices",
+        ):
+            _build_pip_index_arguments(indices)
 
     def test_complex_environment_variables(self) -> None:
         """Test complex environment variable patterns."""

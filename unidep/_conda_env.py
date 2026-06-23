@@ -5,6 +5,8 @@ Conda environment file generation functions.
 
 from __future__ import annotations
 
+import os
+import re
 import sys
 from collections import defaultdict
 from copy import deepcopy
@@ -54,6 +56,30 @@ class CondaEnvironmentSpec(NamedTuple):
     pip_indices: Sequence[str] = ()
 
 
+_ENV_VAR_PATTERN = re.compile(
+    r"\$(?:\{(?P<braced>[A-Za-z_][A-Za-z0-9_]*)\}|(?P<plain>[A-Za-z_][A-Za-z0-9_]*))",
+)
+
+
+def _expand_and_validate_pip_indices(pip_indices: Sequence[str]) -> tuple[str, ...]:
+    expanded_indices = tuple(os.path.expandvars(index) for index in pip_indices)
+    missing_names = sorted(
+        {
+            match.group("braced") or match.group("plain")
+            for index in expanded_indices
+            for match in _ENV_VAR_PATTERN.finditer(index)
+        },
+    )
+    if missing_names:
+        names = ", ".join(missing_names)
+        msg = (
+            f"Unresolved environment variable(s) {names} in pip_indices."
+            " Set the variable(s) before running UniDep or remove the placeholder(s)."
+        )
+        raise ValueError(msg)
+    return expanded_indices
+
+
 def _conda_sel(sel: str) -> CondaPlatform:
     """Return the allowed `sel(platform)` string."""
     _platform = sel.split("-", 1)[0]
@@ -80,8 +106,8 @@ def _normalize_pip_indices(
     if pip_indices is None:
         return ()
     if isinstance(pip_indices, str):
-        return (pip_indices,)
-    return tuple(pip_indices)
+        return _expand_and_validate_pip_indices((pip_indices,))
+    return _expand_and_validate_pip_indices(pip_indices)
 
 
 def _extract_conda_pip_dependencies(

@@ -134,6 +134,7 @@ def get_python_dependencies(  # noqa: PLR0912
         skip_dependencies=skip_dependencies,
         verbose=verbose,
         extras="*",
+        include_local_dependencies=include_local_dependencies,
     )
     if not platforms:
         platforms = list(requirements.platforms)

@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, cast
 from ruamel.yaml import YAML
 
 from unidep._conda_env import (
+    _expand_and_validate_pip_indices,
     create_conda_env_specification,
     write_conda_environment_file,
 )
@@ -1111,11 +1112,7 @@ def _build_pip_index_arguments(pip_indices: Sequence[str]) -> list[str]:
     """
     args = []
     if pip_indices:
-        # Expand environment variables in URLs
-        expanded_indices = []
-        for index in pip_indices:
-            expanded = os.path.expandvars(index)
-            expanded_indices.append(expanded)
+        expanded_indices = _expand_and_validate_pip_indices(pip_indices)
 
         # First index is primary
         args.extend(["--index-url", expanded_indices[0]])
