@@ -1309,6 +1309,12 @@ def test_readme_is_configured_as_wheel_package_data() -> None:
     )
 
 
+def test_build_readme_hook_is_included_in_sdist_manifest() -> None:
+    manifest = (REPO_ROOT / "MANIFEST.in").read_text(encoding="utf-8").splitlines()
+
+    assert "include build_readme.py" in manifest
+
+
 def test_doctor_cli_dispatches(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sys, "argv", ["unidep", "doctor"])
     with patch("unidep._cli.run_doctor_command", return_value=0) as doctor:
