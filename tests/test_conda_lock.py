@@ -309,9 +309,9 @@ pip_indices = [
 """,
     )
 
-    with (
-        patch("unidep._conda_lock._run_conda_lock") as run_conda_lock,
-        pytest.raises(ValueError, match=r"PRIVATE_REPO_TOKEN.*pip_indices"),
+    with patch("unidep._conda_lock._run_conda_lock") as run_conda_lock, pytest.raises(
+        ValueError,
+        match=r"PRIVATE_REPO_TOKEN.*pip_indices",
     ):
         conda_lock_command(
             depth=1,
@@ -328,6 +328,66 @@ pip_indices = [
         )
 
     run_conda_lock.assert_not_called()
+
+
+def test_conda_lock_preserves_pip_index_env_var_in_temp_env(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PRIVATE_REPO_TOKEN", "synthetic-token")
+    req_file = tmp_path / "pyproject.toml"
+    req_file.write_text(
+        """\
+[tool.unidep]
+dependencies = [
+    { pip = "private-runtime" },
+]
+pip_indices = [
+    "https://token:${PRIVATE_REPO_TOKEN}@private.example.com/simple/",
+    "https://pypi.org/simple/",
+]
+""",
+    )
+
+    def fake_run_conda_lock(
+        tmp_env: Path,
+        conda_lock_output: Path,
+        *,
+        check_input_hash: bool,
+        extra_flags: list[str],
+    ) -> None:
+        del check_input_hash, extra_flags
+        tmp_env_content = tmp_env.read_text()
+        assert "${PRIVATE_REPO_TOKEN}" in tmp_env_content
+        assert "synthetic-token" not in tmp_env_content
+        yaml = YAML(typ="rt")
+        with conda_lock_output.open("w") as fp:
+            yaml.dump(
+                {
+                    "version": 1,
+                    "metadata": {
+                        "channels": [{"url": "conda-forge"}],
+                        "platforms": ["linux-64"],
+                    },
+                    "package": [],
+                },
+                fp,
+            )
+
+    with patch("unidep._conda_lock._run_conda_lock", side_effect=fake_run_conda_lock):
+        conda_lock_command(
+            depth=1,
+            directory=tmp_path,
+            files=[req_file],
+            platforms=["linux-64"],
+            verbose=False,
+            only_global=True,
+            check_input_hash=False,
+            ignore_pins=[],
+            overwrite_pins=[],
+            skip_dependencies=[],
+            extra_flags=[],
+        )
 
 
 def test_remove_top_comments(tmp_path: Path) -> None:

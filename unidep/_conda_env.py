@@ -62,12 +62,17 @@ _ENV_VAR_PATTERN = re.compile(
 
 
 def _expand_and_validate_pip_indices(pip_indices: Sequence[str]) -> tuple[str, ...]:
-    expanded_indices = tuple(os.path.expandvars(index) for index in pip_indices)
+    _validate_pip_indices_env_vars(pip_indices)
+    return tuple(os.path.expandvars(index) for index in pip_indices)
+
+
+def _validate_pip_indices_env_vars(pip_indices: Sequence[str]) -> tuple[str, ...]:
     missing_names = sorted(
         {
             match.group("braced") or match.group("plain")
-            for index in expanded_indices
+            for index in pip_indices
             for match in _ENV_VAR_PATTERN.finditer(index)
+            if (match.group("braced") or match.group("plain")) not in os.environ
         },
     )
     if missing_names:
@@ -77,7 +82,7 @@ def _expand_and_validate_pip_indices(pip_indices: Sequence[str]) -> tuple[str, .
             " Set the variable(s) before running UniDep or remove the placeholder(s)."
         )
         raise ValueError(msg)
-    return expanded_indices
+    return tuple(pip_indices)
 
 
 def _conda_sel(sel: str) -> CondaPlatform:
@@ -106,8 +111,8 @@ def _normalize_pip_indices(
     if pip_indices is None:
         return ()
     if isinstance(pip_indices, str):
-        return _expand_and_validate_pip_indices((pip_indices,))
-    return _expand_and_validate_pip_indices(pip_indices)
+        return _validate_pip_indices_env_vars((pip_indices,))
+    return _validate_pip_indices_env_vars(pip_indices)
 
 
 def _extract_conda_pip_dependencies(
