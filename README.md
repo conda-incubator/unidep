@@ -207,8 +207,8 @@ platforms:  # (Optional) specify platforms that are supported (used in conda-loc
   - osx-arm64
 pip_indices:  # (Optional) additional pip index URLs for private packages
   - https://pypi.org/simple/  # Main PyPI index (automatically included if not specified)
-  - https://private.company.com/simple/  # Private company index
-  - https://${PIP_USER}:${PIP_PASSWORD}@private.pypi.org/simple/  # Authenticated index with env vars
+  - https://private.example.com/simple/  # Private index
+  - https://${PIP_USER}:${PIP_PASSWORD}@private.example.com/simple/  # Authenticated index with env vars
 ```
 
 > [!IMPORTANT]
@@ -246,8 +246,8 @@ platforms = [ # (Optional) specify platforms that are supported (used in conda-l
 ]
 pip_indices = [ # (Optional) additional pip index URLs for private packages
     "https://pypi.org/simple/",  # Main PyPI index (automatically included if not specified)
-    "https://private.company.com/simple/",  # Private company index
-    "https://${PIP_USER}:${PIP_PASSWORD}@private.pypi.org/simple/"  # Authenticated index with env vars
+    "https://private.example.com/simple/",  # Private index
+    "https://${PIP_USER}:${PIP_PASSWORD}@private.example.com/simple/"  # Authenticated index with env vars
 ]
 ```
 
@@ -391,7 +391,7 @@ It is also used for creating environment and lock files that are portable across
 
 The `pip_indices` field allows you to specify additional pip index URLs for installing packages from private or alternative package repositories. It may be given as a single string or a list of strings. This is particularly useful for:
 
-- **Private Company Packages**: Access internal packages hosted on private PyPI servers
+- **Private packages**: Access internal packages hosted on private PyPI servers
 - **Alternative Package Repositories**: Use mirrors or alternative package sources
 - **Authenticated Repositories**: Access protected repositories using environment variables for credentials
 
@@ -401,9 +401,11 @@ When `pip_indices` is specified:
 
 1. **First index is primary**: The first URL in the list is used as `--index-url` (primary index)
 2. **Additional indices are extra**: Subsequent URLs are passed as `--extra-index-url` flags
-3. **Environment variable expansion**: Variables like `${PIP_USER}` and `${PIP_PASSWORD}` are automatically expanded from environment variables
+3. **Environment variable validation**: Variables like `${PRIVATE_REPO_TOKEN}` are validated before invoking installers. Installer command arguments receive expanded values; generated environment files preserve the `${VAR}` placeholders so secrets are not written to disk.
 4. **Automatic deduplication**: Duplicate URLs are automatically removed while preserving order
 5. **Integration with all tools**: Works with `unidep install`, `pip install`, and when using `uv` as the installer
+
+When using the `uv` backend directly, prefer `pip_indices` so UniDep can pass explicit index flags. If you configure indexes only with environment variables, use uv's `UV_INDEX_URL` and `UV_EXTRA_INDEX_URL`; `PIP_INDEX_URL` and `PIP_EXTRA_INDEX_URL` are pip-oriented and may not configure uv in the way you expect.
 
 #### Example Usage
 
@@ -412,7 +414,7 @@ When `pip_indices` is specified:
 pip_indices:
   - https://pypi.org/simple/  # Primary index (optional, used by default)
   - https://test.pypi.org/simple/  # Test PyPI for pre-release packages
-  - https://${GITLAB_USER}:${GITLAB_TOKEN}@gitlab.company.com/api/v4/projects/123/packages/pypi/simple  # Private GitLab
+  - https://token:${PRIVATE_REPO_TOKEN}@private.example.com/simple/  # Private index
 ```
 
 ```toml
@@ -420,7 +422,7 @@ pip_indices:
 [tool.unidep]
 pip_indices = [
     "https://download.pytorch.org/whl/cpu",  # PyTorch CPU-only builds
-    "https://${ARTIFACTORY_USER}:${ARTIFACTORY_PASSWORD}@artifactory.company.com/pypi/simple"  # Artifactory
+    "https://token:${PRIVATE_REPO_TOKEN}@private.example.com/simple/"  # Private index
 ]
 ```
 
@@ -435,7 +437,7 @@ channels:
   - conda-forge
 pip-repositories:
   - https://pypi.org/simple/
-  - https://private.company.com/simple/
+  - https://token:${PRIVATE_REPO_TOKEN}@private.example.com/simple/
 dependencies:
   - python
   - pip:
@@ -444,7 +446,7 @@ dependencies:
 
 
 > [!TIP]
-> Store sensitive credentials in environment variables rather than hardcoding them in configuration files. UniDep automatically expands `${VAR_NAME}` patterns.
+> Store sensitive credentials in environment variables rather than hardcoding them in configuration files. UniDep validates `${VAR_NAME}` patterns and expands them only when invoking installers.
 
 ### `[project.dependencies]` in `pyproject.toml` handling
 

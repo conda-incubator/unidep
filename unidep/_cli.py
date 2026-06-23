@@ -36,6 +36,11 @@ from unidep._dependencies_parsing import (
     parse_requirements,
 )
 from unidep._doctor import run_doctor_command
+from unidep._pip_indices import (
+    build_pip_index_arguments,
+    format_command_for_display,
+    redact_command_for_exception,
+)
 from unidep._pixi import generate_pixi_toml
 from unidep._setuptools_integration import (
     filter_python_dependencies,
@@ -1103,26 +1108,12 @@ def _use_uv(no_uv: bool) -> bool:  # noqa: FBT001
     return shutil.which("uv") is not None
 
 
-def _build_pip_index_arguments(pip_indices: Sequence[str]) -> list[str]:
-    """Build pip/uv index arguments from pip_indices list.
-
-    First index becomes --index-url (primary),
-    remaining indices become --extra-index-url (supplementary).
-    """
-    args = []
-    if pip_indices:
-        # Expand environment variables in URLs
-        expanded_indices = []
-        for index in pip_indices:
-            expanded = os.path.expandvars(index)
-            expanded_indices.append(expanded)
-
-        # First index is primary
-        args.extend(["--index-url", expanded_indices[0]])
-        # Additional indices are extra
-        for index in expanded_indices[1:]:
-            args.extend(["--extra-index-url", index])
-    return args
+def _run_with_redacted_command(command: Sequence[str | Path]) -> None:
+    try:
+        subprocess.run(command, check=True)
+    except subprocess.CalledProcessError as exc:
+        exc.cmd = redact_command_for_exception(exc.cmd)
+        raise
 
 
 def _pip_install_local(
@@ -1135,7 +1126,7 @@ def _pip_install_local(
     pip_indices: Sequence[str] | None = None,
     flags: list[str] | None = None,
 ) -> None:  # pragma: no cover
-    index_args = _build_pip_index_arguments(pip_indices or [])
+    index_args = build_pip_index_arguments(pip_indices or [])
     if _use_uv(no_uv):
         pip_command = [
             *conda_run,
@@ -1173,9 +1164,9 @@ def _pip_install_local(
         else:
             pip_command.append(str(folder))
 
-    print(f"📦 Installing project with `{' '.join(pip_command)}`\n")
+    print(f"📦 Installing project with `{format_command_for_display(pip_command)}`\n")
     if not dry_run:
-        subprocess.run(pip_command, check=True)
+        _run_with_redacted_command(pip_command)
 
 
 def _collect_installable_local_paths(
@@ -1335,7 +1326,7 @@ def _install_command(  # noqa: PLR0912
     )
     if env_spec.pip and not skip_pip:
         conda_run = _maybe_conda_run(conda_executable, conda_env_name, conda_env_prefix)
-        index_args = _build_pip_index_arguments(env_spec.pip_indices)
+        index_args = build_pip_index_arguments(env_spec.pip_indices)
         if _use_uv(no_uv):
             pip_command = [
                 *conda_run,
@@ -1357,9 +1348,12 @@ def _install_command(  # noqa: PLR0912
                 *index_args,
                 *env_spec.pip,
             ]
-        print(f"📦 Installing pip dependencies with `{' '.join(pip_command)}`\n")
+        print(
+            f"📦 Installing pip dependencies with "
+            f"`{format_command_for_display(pip_command)}`\n",
+        )
         if not dry_run:  # pragma: no cover
-            subprocess.run(pip_command, check=True)
+            _run_with_redacted_command(pip_command)
 
     if installable:
         pip_flags = ["--no-deps"]  # we just ran pip/conda install, so skip

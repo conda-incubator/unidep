@@ -21,6 +21,7 @@ from unidep._dependency_selection import (
     collapse_selected_universals,
     select_conda_like_requirements,
 )
+from unidep._pip_indices import normalize_pip_indices
 from unidep.platform_definitions import (
     PLATFORM_SELECTOR_MAP,
     CondaPlatform,
@@ -72,16 +73,6 @@ def _as_dependency_entries(
         )
         raise TypeError(msg)
     return list(entries)
-
-
-def _normalize_pip_indices(
-    pip_indices: Sequence[str] | None,
-) -> tuple[str, ...]:
-    if pip_indices is None:
-        return ()
-    if isinstance(pip_indices, str):
-        return (pip_indices,)
-    return tuple(pip_indices)
 
 
 def _extract_conda_pip_dependencies(
@@ -210,7 +201,7 @@ def create_conda_env_specification(  # noqa: C901, PLR0912, PLR0915
 
     entries = _as_dependency_entries(entries)
     conda, pip = _extract_conda_pip_dependencies(entries, resolved_platforms)
-    normalized_pip_indices = _normalize_pip_indices(pip_indices)
+    normalized_pip_indices = normalize_pip_indices(pip_indices)
 
     conda_deps: list[str | dict[str, str]] = CommentedSeq()
     pip_deps: list[str] = CommentedSeq()

@@ -296,7 +296,9 @@ def _handle_missing_keys(
     locked_keys: set[tuple[CondaPip, Platform, str]],
     missing_keys: set[tuple[CondaPip, Platform, str]],
     locked: list[dict[str, Any]],
+    skip_dependencies: list[str],
 ) -> None:
+    _discard_skipped_missing_keys(missing_keys, skip_dependencies)
     add_pkg = partial(
         _add_package_with_dependencies_to_lock,
         lock_spec=lock_spec,
@@ -349,6 +351,18 @@ def _handle_missing_keys(
         print(f"❌ Missing keys {missing_keys}")
 
 
+def _discard_skipped_missing_keys(
+    missing_keys: set[tuple[CondaPip, Platform, str]],
+    skip_dependencies: list[str],
+) -> None:
+    if not skip_dependencies:
+        return
+    skipped = {canonicalize_name(_strip_pip_extras(name)) for name in skip_dependencies}
+    for key in list(missing_keys):
+        if canonicalize_name(_strip_pip_extras(key[2])) in skipped:
+            missing_keys.discard(key)
+
+
 def _conda_lock_subpackage(
     *,
     file: Path,
@@ -356,8 +370,10 @@ def _conda_lock_subpackage(
     channels: list[str],
     platforms: list[Platform],
     yaml: YAML | None,  # Passing this to preserve order!
+    skip_dependencies: list[str] | None = None,
 ) -> Path:
-    requirements = parse_requirements(file)
+    skip_dependencies = skip_dependencies or []
+    requirements = parse_requirements(file, skip_dependencies=skip_dependencies)
     locked: list[dict[str, Any]] = []
     locked_keys: set[tuple[CondaPip, Platform, str]] = set()
     missing_keys: set[tuple[CondaPip, Platform, str]] = set()
@@ -392,6 +408,7 @@ def _conda_lock_subpackage(
         locked_keys=locked_keys,
         missing_keys=missing_keys,
         locked=locked,
+        skip_dependencies=skip_dependencies,
     )
 
     # Sort locked packages by manager, name, platform
@@ -484,7 +501,9 @@ def _conda_lock_subpackages(
     directory: Path,
     depth: int,
     conda_lock_file: str | Path,
+    skip_dependencies: list[str] | None = None,
 ) -> list[Path]:
+    skip_dependencies = skip_dependencies or []
     conda_lock_file = Path(conda_lock_file)
     with YAML(typ="rt") as yaml, conda_lock_file.open() as fp:
         data = yaml.load(fp)
@@ -506,6 +525,7 @@ def _conda_lock_subpackages(
             channels=channels,
             platforms=platforms,
             yaml=yaml,
+            skip_dependencies=skip_dependencies,
         )
         print(f"📝 Generated lock file for `{file}`: `{sublock_file}`")
         lock_files.append(sublock_file)
@@ -553,6 +573,7 @@ def conda_lock_command(
         directory=directory,
         depth=depth,
         conda_lock_file=conda_lock_output,
+        skip_dependencies=skip_dependencies,
     )
     mismatches = _check_consistent_lock_files(
         global_lock_file=conda_lock_output,
