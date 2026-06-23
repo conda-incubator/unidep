@@ -46,6 +46,7 @@ from unidep._cli import (
     _merge_command,
     _merge_optional_dependency_extras,
     _pip_compile_command,
+    _pip_install_local_arguments,
     _pip_subcommand,
     _print_versions,
     _print_with_rich,
@@ -53,9 +54,6 @@ from unidep._cli import (
 )
 from unidep._dependencies_parsing import parse_requirements
 from unidep._setuptools_integration import _deps
-
-if TYPE_CHECKING:
-    from collections.abc import Generator
 
 REPO_ROOT = Path(__file__).parent.parent
 
@@ -401,6 +399,23 @@ def test_install_command_deduplicates_shared_local_dependencies(
     pkgs = " ".join([f"-e {p}" for p in sorted((project1, project2, shared))])
     assert f"pip install --no-deps {pkgs}`" in captured.out
     assert captured.out.count(f"-e {shared}") == 1
+
+
+def test_pip_install_local_arguments_formats_paths() -> None:
+    prefix = ".\\" if os.name == "nt" else "./"
+
+    assert _pip_install_local_arguments(
+        [Path("local_project")],
+        editable=True,
+    ) == ["-e", f"{prefix}local_project"]
+    assert _pip_install_local_arguments(
+        [Path("local_project")],
+        editable=False,
+    ) == [f"{prefix}local_project"]
+    assert _pip_install_local_arguments(
+        [Path("package.whl")],
+        editable=True,
+    ) == [f"{prefix}package.whl"]
 
 
 def _write_editable_install_order_pyproject(

@@ -19,7 +19,7 @@ import sys
 import time
 from importlib import resources as importlib_resources
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, cast, get_args
+from typing import TYPE_CHECKING, Literal, NamedTuple, cast, get_args
 
 from ruamel.yaml import YAML
 
@@ -80,6 +80,13 @@ except ImportError:  # pragma: no cover
 
 _DEP_FILES = "`requirements.yaml` or `pyproject.toml`"
 CondaExecutable = Literal["conda", "mamba", "micromamba"]
+
+
+class InstallableLocalPaths(NamedTuple):
+    """Pip-installable local paths split by install phase."""
+
+    all_paths: list[Path]
+    dependency_paths: list[Path]
 
 
 def _flatten_selected_dependency_entries(
@@ -1184,7 +1191,7 @@ def _collect_installable_local_paths(
     paths_with_extras: Sequence[PathWithExtras],
     *,
     verbose: bool,
-) -> tuple[list[Path], list[Path]]:
+) -> InstallableLocalPaths:
     installable: list[Path] = []
     for file in paths_with_extras:
         if is_pip_installable(file.path.parent):
@@ -1217,7 +1224,10 @@ def _collect_installable_local_paths(
             installable_set.add(resolved_dep)
             installable.append(dep)
 
-    return installable, local_dependency_installable
+    return InstallableLocalPaths(
+        all_paths=installable,
+        dependency_paths=local_dependency_installable,
+    )
 
 
 def _conda_dependencies_with_required_pip(
@@ -1298,18 +1308,17 @@ def _install_command(  # noqa: PLR0912, PLR0915
         skip_pip = True
         skip_conda = True
 
-    if not skip_local:
-        installable, local_dependency_installable = _collect_installable_local_paths(
+    if skip_local:
+        local_paths = InstallableLocalPaths(all_paths=[], dependency_paths=[])
+    else:
+        local_paths = _collect_installable_local_paths(
             paths_with_extras,
             verbose=verbose,
         )
-    else:
-        installable = []
-        local_dependency_installable = []
     conda_dependencies = _conda_dependencies_with_required_pip(
         env_spec.conda,
         has_pip_dependencies=bool(env_spec.pip) and not skip_pip,
-        has_local_install_targets=bool(installable),
+        has_local_install_targets=bool(local_paths.all_paths),
         skip_conda=skip_conda,
         conda_executable=conda_executable,
     )
@@ -1352,7 +1361,7 @@ def _install_command(  # noqa: PLR0912, PLR0915
         index_args = build_pip_index_arguments(env_spec.pip_indices)
         use_uv = _use_uv(no_uv)
         local_dependency_args = _pip_install_local_arguments(
-            local_dependency_installable if use_uv and editable else [],
+            local_paths.dependency_paths if use_uv and editable else [],
             editable=True,
         )
         if use_uv:
@@ -1385,7 +1394,7 @@ def _install_command(  # noqa: PLR0912, PLR0915
         if not dry_run:  # pragma: no cover
             _run_with_redacted_command(pip_command)
 
-    if installable:
+    if local_paths.all_paths:
         pip_flags = ["--no-deps"]  # we just ran pip/conda install, so skip
         if verbose:
             pip_flags.append("--verbose")
@@ -1395,7 +1404,7 @@ def _install_command(  # noqa: PLR0912, PLR0915
             conda_env_prefix,
         )
         _pip_install_local(
-            *sorted(installable),
+            *sorted(local_paths.all_paths),
             editable=editable,
             dry_run=dry_run,
             python_executable=python_executable,
