@@ -17,7 +17,7 @@ _ENV_VAR_PATTERN = re.compile(
 )
 
 
-def validate_pip_indices_env_vars(pip_indices: Sequence[str]) -> tuple[str, ...]:
+def _validate_pip_indices_env_vars(pip_indices: Sequence[str]) -> tuple[str, ...]:
     """Validate that all env vars referenced by pip index URLs are set."""
     missing_names = sorted(
         {
@@ -37,9 +37,9 @@ def validate_pip_indices_env_vars(pip_indices: Sequence[str]) -> tuple[str, ...]
     return tuple(pip_indices)
 
 
-def expand_pip_indices_for_installer(pip_indices: Sequence[str]) -> tuple[str, ...]:
+def _expand_pip_indices_for_installer(pip_indices: Sequence[str]) -> tuple[str, ...]:
     """Expand pip index env vars for installer command arguments."""
-    validate_pip_indices_env_vars(pip_indices)
+    _validate_pip_indices_env_vars(pip_indices)
     return tuple(os.path.expandvars(index) for index in pip_indices)
 
 
@@ -48,22 +48,22 @@ def normalize_pip_indices(pip_indices: Sequence[str] | None) -> tuple[str, ...]:
     if pip_indices is None:
         return ()
     if isinstance(pip_indices, str):
-        return validate_pip_indices_env_vars((pip_indices,))
-    return validate_pip_indices_env_vars(pip_indices)
+        return _validate_pip_indices_env_vars((pip_indices,))
+    return _validate_pip_indices_env_vars(pip_indices)
 
 
 def build_pip_index_arguments(pip_indices: Sequence[str]) -> list[str]:
     """Build pip/uv index arguments from pip_indices list."""
     args = []
     if pip_indices:
-        expanded_indices = expand_pip_indices_for_installer(pip_indices)
+        expanded_indices = _expand_pip_indices_for_installer(pip_indices)
         args.extend(["--index-url", expanded_indices[0]])
         for index in expanded_indices[1:]:
             args.extend(["--extra-index-url", index])
     return args
 
 
-def redact_url_credentials(value: str) -> str:
+def _redact_url_credentials(value: str) -> str:
     """Redact userinfo credentials from HTTP(S) URLs."""
     try:
         parsed = urlsplit(value)
@@ -81,15 +81,15 @@ def redact_url_credentials(value: str) -> str:
 
 def format_command_for_display(command: Sequence[str | Path]) -> str:
     """Format a command for logging without exposing URL credentials."""
-    return " ".join(redact_url_credentials(str(part)) for part in command)
+    return " ".join(_redact_url_credentials(str(part)) for part in command)
 
 
 def redact_command_for_exception(command: object) -> object:
     """Redact URL credentials from a subprocess exception command."""
     if isinstance(command, str):
-        return redact_url_credentials(command)
+        return _redact_url_credentials(command)
     if isinstance(command, list):
-        return [redact_url_credentials(str(part)) for part in command]
+        return [_redact_url_credentials(str(part)) for part in command]
     if isinstance(command, tuple):
-        return tuple(redact_url_credentials(str(part)) for part in command)
+        return tuple(_redact_url_credentials(str(part)) for part in command)
     return command
