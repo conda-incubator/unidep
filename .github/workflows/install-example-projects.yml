@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"] # skips 3.7 (unsupported on GH Actions)
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
         platform: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.platform }}
     env:
@@ -42,7 +42,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"] # skips 3.7 (unsupported on GH Actions)
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
         platform: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.platform }}
     env:
@@ -88,7 +88,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.8", "3.12"] # Just testing the oldest and newest supported versions
+        python-version: ["3.9", "3.12"] # Just testing the oldest and newest supported versions
         platform: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.platform }}
     env:

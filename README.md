@@ -1688,9 +1688,9 @@ You might get an error like this when using a `pip` version older than `22.0`:
 ```bash
 $ pip install /path/to/your/project/using/unidep
   ...
-  File "/usr/lib/python3.8/pathlib.py", line 1222, in open
+  File "/usr/lib/python3.9/pathlib.py", line 1222, in open
     return io.open(self, mode, buffering, encoding, errors, newline,
-  File "/usr/lib/python3.8/pathlib.py", line 1078, in _opener
+  File "/usr/lib/python3.9/pathlib.py", line 1078, in _opener
     return self._accessor.open(self, flags, mode)
 FileNotFoundError: [Errno 2] No such file or directory: '/tmp/common-requirements.yaml'
 ```
