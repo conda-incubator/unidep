@@ -1361,6 +1361,32 @@ def test_read_docs_uses_packaged_readme(monkeypatch: pytest.MonkeyPatch) -> None
     assert cli._read_docs() == "packaged README"
 
 
+def test_read_docs_uses_legacy_importlib_resources_api(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def read_text(package: str, resource: str, *, encoding: str) -> str:
+        assert package == "unidep"
+        assert resource == "README.md"
+        assert encoding == "utf-8"
+        return "legacy README"
+
+    monkeypatch.setattr(cli.importlib_resources, "files", None)
+    monkeypatch.setattr(cli.importlib_resources, "read_text", read_text)
+
+    assert cli._read_docs() == "legacy README"
+
+
+def test_read_docs_reports_missing_readme(monkeypatch: pytest.MonkeyPatch) -> None:
+    def missing_package_files(_package: str) -> None:
+        raise FileNotFoundError
+
+    monkeypatch.setattr(cli.importlib_resources, "files", missing_package_files)
+    monkeypatch.setattr(cli.Path, "is_file", lambda _self: False)
+
+    with pytest.raises(FileNotFoundError, match="Could not find README.md"):
+        cli._read_docs()
+
+
 def test_readme_is_configured_as_wheel_package_data() -> None:
     pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())
 
