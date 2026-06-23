@@ -17,6 +17,7 @@ import shutil
 import subprocess
 import sys
 import time
+from importlib import resources as importlib_resources
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
@@ -771,6 +772,11 @@ def _parse_args() -> argparse.Namespace:  # noqa: PLR0915
         help="Print version information of unidep.",
         formatter_class=_HelpFormatter,
     )
+    subparsers.add_parser(
+        "docs",
+        help="Print the full README.md documentation.",
+        formatter_class=_HelpFormatter,
+    )
 
     args = parser.parse_args()
 
@@ -797,6 +803,31 @@ def _ensure_files(files: list[Path]) -> None:
     if missing:
         print(f"❌ One or more files ({', '.join(missing)}) not found.")
         sys.exit(1)
+
+
+def _read_docs() -> str:
+    """Read the project README for `unidep docs`."""
+    try:
+        files = getattr(importlib_resources, "files", None)
+        if files is not None:
+            return (files("unidep") / "README.md").read_text(encoding="utf-8")
+        return importlib_resources.read_text(  # type: ignore[attr-defined]
+            "unidep",
+            "README.md",
+            encoding="utf-8",
+        )
+    except FileNotFoundError:
+        readme = Path(__file__).resolve().parent.parent / "README.md"
+        if readme.is_file():
+            return readme.read_text(encoding="utf-8")
+
+    msg = "Could not find README.md for `unidep docs`."
+    raise FileNotFoundError(msg)
+
+
+def _docs_command() -> None:
+    """Print the full README.md documentation."""
+    print(_read_docs(), end="")
 
 
 def _get_conda_executable(which: CondaExecutable) -> str | None:
@@ -1971,3 +2002,5 @@ def main() -> None:  # noqa: PLR0912
             sys.exit(exit_code)
     elif args.command == "version":  # pragma: no cover
         _print_versions()
+    elif args.command == "docs":
+        _docs_command()

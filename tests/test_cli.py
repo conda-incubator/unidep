@@ -21,6 +21,7 @@ try:
 except ImportError:  # pragma: no cover
     import tomli as tomllib
 
+import unidep._cli as cli
 from unidep._cli import (
     CondaExecutable,
     _capitalize_dir,
@@ -1264,6 +1265,54 @@ def test_version(capsys: pytest.CaptureFixture) -> None:
     assert "unidep location" in captured.out
     assert "unidep version" in captured.out
     assert "packaging" in captured.out
+
+
+def test_docs_cli_prints_readme(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    monkeypatch.setattr(sys, "argv", ["unidep", "docs"])
+
+    main()
+
+    captured = capsys.readouterr()
+    assert captured.out == (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+
+
+def test_read_docs_uses_packaged_readme(monkeypatch: pytest.MonkeyPatch) -> None:
+    class PackagedReadme:
+        def read_text(self, *, encoding: str) -> str:
+            assert encoding == "utf-8"
+            return "packaged README"
+
+    class PackageFiles:
+        def __truediv__(self, resource: str) -> PackagedReadme:
+            assert resource == "README.md"
+            return PackagedReadme()
+
+    def package_files(package: str) -> PackageFiles:
+        assert package == "unidep"
+        return PackageFiles()
+
+    monkeypatch.setattr(cli.importlib_resources, "files", package_files)
+
+    assert cli._read_docs() == "packaged README"
+
+
+def test_readme_is_configured_as_wheel_package_data() -> None:
+    pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())
+
+    assert "README.md" in pyproject["tool"]["setuptools"]["package-data"]["unidep"]
+    assert (
+        pyproject["tool"]["setuptools"]["cmdclass"]["build_py"]
+        == "build_readme.build_py"
+    )
+
+
+def test_build_readme_hook_is_included_in_sdist_manifest() -> None:
+    manifest = (REPO_ROOT / "MANIFEST.in").read_text(encoding="utf-8").splitlines()
+
+    assert "include build_readme.py" in manifest
 
 
 def test_doctor_cli_dispatches(monkeypatch: pytest.MonkeyPatch) -> None:
