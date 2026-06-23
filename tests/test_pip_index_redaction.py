@@ -9,6 +9,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from unidep._cli import _install_command, _pip_install_local
+from unidep._pip_indices import (
+    format_command_for_display,
+    redact_command_for_exception,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -44,19 +48,61 @@ def test_pip_install_local_print_redacts_index_credentials(
     )
 
 
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("https://[not-valid/simple/", "https://[not-valid/simple/"),
+        ("https://token@", "https://token@"),
+    ],
+)
+def test_format_command_for_display_keeps_unparseable_urls(
+    url: str,
+    expected: str,
+) -> None:
+    assert format_command_for_display(["pip", "install", url]) == (
+        f"pip install {expected}"
+    )
+
+
+def test_redact_command_for_exception_handles_non_list_commands() -> None:
+    tuple_command = (
+        "pip",
+        "install",
+        "https://token:synthetic-token@private.example.com/simple/",
+    )
+
+    assert (
+        redact_command_for_exception(
+            "https://token:synthetic-token@private.example.com/simple/",
+        )
+        == "https://***@private.example.com/simple/"
+    )
+    assert redact_command_for_exception(tuple_command) == (
+        "pip",
+        "install",
+        "https://***@private.example.com/simple/",
+    )
+
+    sentinel = object()
+    assert redact_command_for_exception(sentinel) is sentinel
+
+
 def test_pip_install_local_error_redacts_index_credentials(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("PRIVATE_REPO_TOKEN", "synthetic-token")
     index_url = "https://token:synthetic-token@private.example.com/simple/"
 
-    with patch(
-        "unidep._cli.subprocess.run",
-        side_effect=subprocess.CalledProcessError(
-            1,
-            ["/usr/bin/python", "-m", "pip", "install", "--index-url", index_url],
+    with (
+        patch(
+            "unidep._cli.subprocess.run",
+            side_effect=subprocess.CalledProcessError(
+                1,
+                ["/usr/bin/python", "-m", "pip", "install", "--index-url", index_url],
+            ),
         ),
-    ), pytest.raises(subprocess.CalledProcessError) as exc_info:
+        pytest.raises(subprocess.CalledProcessError) as exc_info,
+    ):
         _pip_install_local(
             "test_package",
             editable=False,
@@ -91,9 +137,12 @@ dependencies:
 """,
     )
 
-    with patch("unidep._cli._maybe_conda_executable", return_value=None), patch(
-        "unidep._cli.subprocess.run",
-    ) as run:
+    with (
+        patch("unidep._cli._maybe_conda_executable", return_value=None),
+        patch(
+            "unidep._cli.subprocess.run",
+        ) as run,
+    ):
         run.return_value = MagicMock(returncode=0)
         _install_command(
             req_file,
@@ -137,13 +186,17 @@ dependencies:
 """,
     )
 
-    with patch("unidep._cli._maybe_conda_executable", return_value=None), patch(
-        "unidep._cli.subprocess.run",
-        side_effect=subprocess.CalledProcessError(
-            1,
-            ["/usr/bin/python", "-m", "pip", "install", "--index-url", index_url],
+    with (
+        patch("unidep._cli._maybe_conda_executable", return_value=None),
+        patch(
+            "unidep._cli.subprocess.run",
+            side_effect=subprocess.CalledProcessError(
+                1,
+                ["/usr/bin/python", "-m", "pip", "install", "--index-url", index_url],
+            ),
         ),
-    ), pytest.raises(subprocess.CalledProcessError) as exc_info:
+        pytest.raises(subprocess.CalledProcessError) as exc_info,
+    ):
         _install_command(
             req_file,
             conda_executable=None,
