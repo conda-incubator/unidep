@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=42", "wheel"]
+requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -70,7 +70,10 @@ include = ["unidep.*", "unidep"]
 version = { attr = "unidep._version.__version__" }
 
 [tool.setuptools.package-data]
-"unidep" = ["py.typed"]
+"unidep" = ["py.typed", "README.md"]
+
+[tool.setuptools.cmdclass]
+build_py = "build_readme.build_py"
 
 [tool.pytest.ini_options]
 addopts = """
