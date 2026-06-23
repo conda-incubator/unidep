@@ -10,10 +10,9 @@ authors = [{ name = "Bas Nijholt", email = "bas@nijho.lt" }]
 dependencies = [
     "packaging",
     "ruamel.yaml",
-    "typing_extensions; python_version < '3.8'",
     "tomli; python_version < '3.11'",
 ]
-requires-python = ">=3.7"
+requires-python = ">=3.9"
 
 [project.readme]
 file = "README.md"
@@ -28,7 +27,7 @@ conda-lock = ["conda-lock", "conda-package-handling"]
 pip-compile = ["pip-tools"]
 pytest = ["pytest", "GitPython"] # The pytest plugin
 rich = ["rich-argparse"]
-pixi = ["pixi-to-conda-lock; python_version >= '3.9'", "tomli_w"]
+pixi = ["pixi-to-conda-lock", "tomli_w"]
 # Everything except 'test' and 'docs'
 all = [
     "unidep[toml,conda-lock,pip-compile,pytest,rich,pixi]",
@@ -101,7 +100,7 @@ line_length = 88
 
 [tool.ruff]
 line-length = 88
-target-version = "py37"
+target-version = "py39"
 
 [tool.ruff.lint]
 select = ["ALL"]
@@ -131,7 +130,7 @@ ignore = [
 max-complexity = 18
 
 [tool.mypy]
-python_version = "3.8"  # 3.7 is no longer supported by mypy
+python_version = "3.9"
 
 # Use bump-my-version, e.g., call `bump-my-version bump minor`
 [tool.bumpversion]
