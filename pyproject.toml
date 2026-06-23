@@ -26,7 +26,7 @@ toml = ["tomli; python_version < '3.11'"]
 conda-lock = ["conda-lock", "conda-package-handling"]
 pip-compile = ["pip-tools"]
 pytest = ["pytest", "GitPython"] # The pytest plugin
-rich = ["rich-argparse"]
+rich = ["rich", "rich-argparse"]
 pixi = ["pixi-to-conda-lock", "tomli_w"]
 # Everything except 'test' and 'docs'
 all = [

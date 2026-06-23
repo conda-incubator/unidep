@@ -19,10 +19,11 @@ import sys
 import time
 from importlib import resources as importlib_resources
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Literal, cast, get_args
 
 from ruamel.yaml import YAML
 
+from unidep._cli_output import print_command, print_phase, rich_class
 from unidep._conda_env import (
     create_conda_env_specification,
     write_conda_environment_file,
@@ -59,11 +60,6 @@ from unidep.utils import (
     resolve_platforms,
     warn,
 )
-
-if sys.version_info >= (3, 8):
-    from typing import Literal, get_args
-else:  # pragma: no cover
-    from typing_extensions import Literal, get_args
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -980,13 +976,13 @@ def _conda_cli_command_json(
         raise
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def _conda_env_list(conda_executable: CondaExecutable) -> list[str]:
     """Get a list of conda environments."""
     return _conda_cli_command_json(conda_executable, "env", "list")["envs"]
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def _conda_info(conda_executable: CondaExecutable) -> dict:
     return _conda_cli_command_json(conda_executable, "info")
 
@@ -1077,7 +1073,11 @@ def _create_conda_environment(
 ) -> None:  # pragma: no cover
     """Create an empty conda environment."""
     conda_command = [_maybe_exe(conda_executable), "create", "--yes", *args]
-    print(f"📦 Creating empty conda environment with `{' '.join(conda_command)}`\n")
+    print_phase("Creating empty conda environment")
+    print_command(
+        "Creating empty conda environment",
+        " ".join(conda_command),
+    )
     subprocess.run(conda_command, check=True)
 
 
@@ -1164,7 +1164,8 @@ def _pip_install_local(
         else:
             pip_command.append(str(folder))
 
-    print(f"📦 Installing project with `{format_command_for_display(pip_command)}`\n")
+    print_phase("Installing project")
+    print_command("Installing project", format_command_for_display(pip_command))
     if not dry_run:
         _run_with_redacted_command(pip_command)
 
@@ -1224,7 +1225,7 @@ def _conda_dependencies_with_required_pip(
     return dependencies
 
 
-def _install_command(  # noqa: PLR0912
+def _install_command(  # noqa: PLR0912, PLR0915
     *files: Path,
     conda_executable: CondaExecutable | None,
     conda_env_name: str | None,
@@ -1316,7 +1317,11 @@ def _install_command(  # noqa: PLR0912
         # so what we print is what the user would type (copy-paste).
         to_print = [_format_inline_conda_package(pkg) for pkg in conda_dependencies]
         conda_command_str = " ".join((*conda_command, *to_print))
-        print(f"📦 Installing conda dependencies with `{conda_command_str}`\n")
+        print_phase("Installing conda dependencies")
+        print_command(
+            "Installing conda dependencies",
+            conda_command_str,
+        )
         if not dry_run:  # pragma: no cover
             subprocess.run((*conda_command, *conda_dependencies), check=True)
     python_executable = _python_executable(
@@ -1348,9 +1353,10 @@ def _install_command(  # noqa: PLR0912
                 *index_args,
                 *env_spec.pip,
             ]
-        print(
-            f"📦 Installing pip dependencies with "
-            f"`{format_command_for_display(pip_command)}`\n",
+        print_phase("Installing pip dependencies")
+        print_command(
+            "Installing pip dependencies",
+            format_command_for_display(pip_command),
         )
         if not dry_run:  # pragma: no cover
             _run_with_redacted_command(pip_command)
@@ -1499,10 +1505,12 @@ def _create_env_from_lock(  # noqa: PLR0912
     env_identifier = (
         f"'{conda_env_name}'" if conda_env_name else f"at '{conda_env_prefix}'"
     )
-    print(f"📦 Creating conda environment {env_identifier} with `{create_cmd_str}`")
+    label = f"Creating conda environment {env_identifier}"
 
     if not dry_run:  # pragma: no cover
         try:
+            print_phase(label)
+            print_command(label, create_cmd_str, blank_after=False)
             subprocess.run(create_cmd, check=True)
             if verbose:
                 print(f"✅ Environment {env_identifier} created successfully.")
@@ -1510,6 +1518,7 @@ def _create_env_from_lock(  # noqa: PLR0912
             print(f"❌ Failed to create environment: {e}")
             sys.exit(1)
     else:
+        print_command(label, create_cmd_str, blank_after=False)
         print("🏁 Dry run completed. No environment was created.")
 
 
@@ -1795,11 +1804,14 @@ def _print_versions() -> None:  # pragma: no cover
 
 def _print_with_rich(data: list) -> None:
     """Print data as a table using rich, if it's installed."""
-    from rich.console import Console
-    from rich.table import Table
+    console_cls = rich_class("rich.console", "Console")
+    table_cls = rich_class("rich.table", "Table")
+    if console_cls is None or table_cls is None:
+        print("\n".join(data))
+        return
 
-    console = Console()
-    table = Table(show_header=False)
+    console = console_cls()
+    table = table_cls(show_header=False)
     table.add_column("Property", style="cyan")
     table.add_column("Value", style="magenta")
     for line in data:
