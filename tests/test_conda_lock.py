@@ -438,6 +438,7 @@ def test_handle_missing_keys(capsys: pytest.CaptureFixture) -> None:
             locked_keys=locked_keys,
             missing_keys=missing_keys,
             locked=locked,
+            skip_dependencies=[],
         )
         mock.assert_called_once()
 
@@ -472,6 +473,7 @@ def test_handle_missing_keys_adds_matching_conda_package() -> None:
             locked_keys=locked_keys,
             missing_keys=missing_keys,
             locked=locked,
+            skip_dependencies=[],
         )
 
     assert missing_keys == set()

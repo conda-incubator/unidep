@@ -296,9 +296,9 @@ def _handle_missing_keys(
     locked_keys: set[tuple[CondaPip, Platform, str]],
     missing_keys: set[tuple[CondaPip, Platform, str]],
     locked: list[dict[str, Any]],
-    skip_dependencies: list[str] | None = None,
+    skip_dependencies: list[str],
 ) -> None:
-    _discard_skipped_missing_keys(missing_keys, skip_dependencies or [])
+    _discard_skipped_missing_keys(missing_keys, skip_dependencies)
     add_pkg = partial(
         _add_package_with_dependencies_to_lock,
         lock_spec=lock_spec,
@@ -372,6 +372,7 @@ def _conda_lock_subpackage(
     yaml: YAML | None,  # Passing this to preserve order!
     skip_dependencies: list[str] | None = None,
 ) -> Path:
+    skip_dependencies = skip_dependencies or []
     requirements = parse_requirements(file, skip_dependencies=skip_dependencies)
     locked: list[dict[str, Any]] = []
     locked_keys: set[tuple[CondaPip, Platform, str]] = set()
@@ -502,6 +503,7 @@ def _conda_lock_subpackages(
     conda_lock_file: str | Path,
     skip_dependencies: list[str] | None = None,
 ) -> list[Path]:
+    skip_dependencies = skip_dependencies or []
     conda_lock_file = Path(conda_lock_file)
     with YAML(typ="rt") as yaml, conda_lock_file.open() as fp:
         data = yaml.load(fp)
