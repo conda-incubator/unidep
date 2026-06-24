@@ -17,7 +17,6 @@ import shutil
 import subprocess
 import sys
 import time
-from contextlib import contextmanager
 from importlib import resources as importlib_resources
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, NamedTuple, cast, get_args
@@ -64,7 +63,7 @@ from unidep.utils import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Sequence
+    from collections.abc import Sequence
 
     from unidep.utils import PathWithExtras
 
@@ -111,15 +110,6 @@ def _collect_available_optional_dependency_groups(
     for found_file in found_files:
         groups.update(_load(found_file, yaml).get("optional_dependencies", {}))
     return sorted(groups)
-
-
-@contextmanager
-def _missing_pip_index_env_vars_as_cli_error() -> Generator[None]:
-    try:
-        yield
-    except MissingPipIndexEnvironmentVariablesError as error:
-        print(f"❌ {error}", file=sys.stderr)
-        sys.exit(1)
 
 
 def _merge_optional_dependency_extras(
@@ -1663,7 +1653,7 @@ def _merge_command(
         env_entries,
         requirements.channels,
         requirements.pip_indices,
-        platforms=platforms,
+        platforms,
         selector=selector,
     )
     output_file = None if stdout else output
@@ -1895,28 +1885,27 @@ def _pip_subcommand(
     return escape_unicode(separator).join(pip_dependencies)
 
 
-def main() -> None:  # noqa: PLR0912
+def _main() -> None:  # noqa: PLR0912
     """Main entry point for the command-line tool."""
     args = _parse_args()
 
     if args.command == "merge":  # pragma: no cover
-        with _missing_pip_index_env_vars_as_cli_error():
-            _merge_command(
-                depth=args.depth,
-                directory=args.directory,
-                files=None,
-                name=args.name,
-                output=args.output,
-                stdout=args.stdout,
-                selector=args.selector,
-                platforms=args.platform,
-                optional_dependencies=args.optional_dependencies,
-                all_optional_dependencies=args.all_optional_dependencies,
-                ignore_pins=args.ignore_pin,
-                skip_dependencies=args.skip_dependency,
-                overwrite_pins=args.overwrite_pin,
-                verbose=args.verbose,
-            )
+        _merge_command(
+            depth=args.depth,
+            directory=args.directory,
+            files=None,
+            name=args.name,
+            output=args.output,
+            stdout=args.stdout,
+            selector=args.selector,
+            platforms=args.platform,
+            optional_dependencies=args.optional_dependencies,
+            all_optional_dependencies=args.all_optional_dependencies,
+            ignore_pins=args.ignore_pin,
+            skip_dependencies=args.skip_dependency,
+            overwrite_pins=args.overwrite_pin,
+            verbose=args.verbose,
+        )
     elif args.command == "pip":  # pragma: no cover
         print(
             _pip_subcommand(
@@ -1943,13 +1932,12 @@ def main() -> None:  # noqa: PLR0912
             requirements.dependency_entries,
             requirements.optional_dependency_entries,
         )
-        with _missing_pip_index_env_vars_as_cli_error():
-            env_spec = create_conda_env_specification(
-                env_entries,
-                requirements.channels,
-                requirements.pip_indices,
-                platforms=platforms,
-            )
+        env_spec = create_conda_env_specification(
+            env_entries,
+            requirements.channels,
+            requirements.pip_indices,
+            platforms=platforms,
+        )
 
         if any(parse_folder_or_filename(f).extras for f in files):
             msg = "🚧 The `conda` command currently does not support extras."
@@ -1960,64 +1948,61 @@ def main() -> None:  # noqa: PLR0912
     elif args.command == "install":
         if args.conda_env_name is None and args.conda_env_prefix is None:
             _check_conda_prefix()
-        with _missing_pip_index_env_vars_as_cli_error():
-            _install_command(
-                *(args.files or [Path()]),
-                conda_executable=args.conda_executable,
-                conda_env_name=args.conda_env_name,
-                conda_env_prefix=args.conda_env_prefix,
-                conda_lock_file=args.conda_lock_file,
-                dry_run=args.dry_run,
-                editable=args.editable,
-                skip_local=args.skip_local,
-                skip_pip=args.skip_pip,
-                skip_conda=args.skip_conda,
-                no_dependencies=args.no_dependencies,
-                ignore_pins=args.ignore_pin,
-                skip_dependencies=args.skip_dependency,
-                overwrite_pins=args.overwrite_pin,
-                no_uv=args.no_uv,
-                verbose=args.verbose,
-            )
+        _install_command(
+            *(args.files or [Path()]),
+            conda_executable=args.conda_executable,
+            conda_env_name=args.conda_env_name,
+            conda_env_prefix=args.conda_env_prefix,
+            conda_lock_file=args.conda_lock_file,
+            dry_run=args.dry_run,
+            editable=args.editable,
+            skip_local=args.skip_local,
+            skip_pip=args.skip_pip,
+            skip_conda=args.skip_conda,
+            no_dependencies=args.no_dependencies,
+            ignore_pins=args.ignore_pin,
+            skip_dependencies=args.skip_dependency,
+            overwrite_pins=args.overwrite_pin,
+            no_uv=args.no_uv,
+            verbose=args.verbose,
+        )
     elif args.command == "install-all":
         if args.conda_env_name is None and args.conda_env_prefix is None:
             _check_conda_prefix()
-        with _missing_pip_index_env_vars_as_cli_error():
-            _install_all_command(
-                conda_executable=args.conda_executable,
-                conda_env_name=args.conda_env_name,
-                conda_env_prefix=args.conda_env_prefix,
-                conda_lock_file=args.conda_lock_file,
-                dry_run=args.dry_run,
-                editable=args.editable,
-                depth=args.depth,
-                directory=args.directory,
-                skip_local=args.skip_local,
-                skip_pip=args.skip_pip,
-                skip_conda=args.skip_conda,
-                no_dependencies=args.no_dependencies,
-                ignore_pins=args.ignore_pin,
-                skip_dependencies=args.skip_dependency,
-                overwrite_pins=args.overwrite_pin,
-                no_uv=args.no_uv,
-                verbose=args.verbose,
-            )
+        _install_all_command(
+            conda_executable=args.conda_executable,
+            conda_env_name=args.conda_env_name,
+            conda_env_prefix=args.conda_env_prefix,
+            conda_lock_file=args.conda_lock_file,
+            dry_run=args.dry_run,
+            editable=args.editable,
+            depth=args.depth,
+            directory=args.directory,
+            skip_local=args.skip_local,
+            skip_pip=args.skip_pip,
+            skip_conda=args.skip_conda,
+            no_dependencies=args.no_dependencies,
+            ignore_pins=args.ignore_pin,
+            skip_dependencies=args.skip_dependency,
+            overwrite_pins=args.overwrite_pin,
+            no_uv=args.no_uv,
+            verbose=args.verbose,
+        )
     elif args.command == "conda-lock":  # pragma: no cover
-        with _missing_pip_index_env_vars_as_cli_error():
-            conda_lock_command(
-                depth=args.depth,
-                directory=args.directory,
-                files=args.file or None,
-                platforms=args.platform,
-                verbose=args.verbose,
-                only_global=args.only_global,
-                ignore_pins=args.ignore_pin,
-                skip_dependencies=args.skip_dependency,
-                overwrite_pins=args.overwrite_pin,
-                check_input_hash=args.check_input_hash,
-                extra_flags=args.extra_flags,
-                lockfile=args.lockfile,
-            )
+        conda_lock_command(
+            depth=args.depth,
+            directory=args.directory,
+            files=args.file or None,
+            platforms=args.platform,
+            verbose=args.verbose,
+            only_global=args.only_global,
+            ignore_pins=args.ignore_pin,
+            skip_dependencies=args.skip_dependency,
+            overwrite_pins=args.overwrite_pin,
+            check_input_hash=args.check_input_hash,
+            extra_flags=args.extra_flags,
+            lockfile=args.lockfile,
+        )
     elif args.command == "pixi":  # pragma: no cover
         _pixi_command(
             depth=args.depth,
@@ -2062,3 +2047,12 @@ def main() -> None:  # noqa: PLR0912
         _print_versions()
     elif args.command == "docs":
         _docs_command()
+
+
+def main() -> None:
+    """Run the command-line tool with user-facing error reporting."""
+    try:
+        _main()
+    except MissingPipIndexEnvironmentVariablesError as error:
+        print(f"❌ {error}", file=sys.stderr)
+        sys.exit(1)
