@@ -17,6 +17,10 @@ _ENV_VAR_PATTERN = re.compile(
 )
 
 
+class MissingPipIndexEnvironmentVariablesError(ValueError):
+    """Raised when pip index URL environment variable placeholders are unset."""
+
+
 def _validate_pip_indices_env_vars(pip_indices: Sequence[str]) -> tuple[str, ...]:
     """Validate that all env vars referenced by pip index URLs are set."""
     missing_names = sorted(
@@ -33,7 +37,7 @@ def _validate_pip_indices_env_vars(pip_indices: Sequence[str]) -> tuple[str, ...
             f"Unresolved environment variable(s) {names} in pip_indices."
             " Set the variable(s) before running UniDep or remove the placeholder(s)."
         )
-        raise ValueError(msg)
+        raise MissingPipIndexEnvironmentVariablesError(msg)
     return tuple(pip_indices)
 
 
