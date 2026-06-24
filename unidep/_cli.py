@@ -38,6 +38,7 @@ from unidep._dependencies_parsing import (
 )
 from unidep._doctor import run_doctor_command
 from unidep._pip_indices import (
+    MissingPipIndexEnvironmentVariablesError,
     build_pip_index_arguments,
     format_command_for_display,
     redact_command_for_exception,
@@ -1884,7 +1885,7 @@ def _pip_subcommand(
     return escape_unicode(separator).join(pip_dependencies)
 
 
-def main() -> None:  # noqa: PLR0912
+def _main() -> None:  # noqa: PLR0912
     """Main entry point for the command-line tool."""
     args = _parse_args()
 
@@ -2046,3 +2047,12 @@ def main() -> None:  # noqa: PLR0912
         _print_versions()
     elif args.command == "docs":
         _docs_command()
+
+
+def main() -> None:
+    """Run the command-line tool with user-facing error reporting."""
+    try:
+        _main()
+    except MissingPipIndexEnvironmentVariablesError as error:
+        print(f"❌ {error}", file=sys.stderr)
+        sys.exit(1)

@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import os
+import sys
+import textwrap
 from pathlib import Path  # noqa: TC003
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from unidep._cli import main
 from unidep._conda_env import create_conda_env_specification
 from unidep._pip_indices import build_pip_index_arguments
 
@@ -472,6 +475,55 @@ dependencies:
 
 class TestPipIndicesIntegration:
     """Integration tests for pip_indices throughout the workflow."""
+
+    def test_install_all_reports_missing_env_var_without_traceback(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Test missing pip_indices env vars produce a clean CLI error."""
+        project = tmp_path / "project"
+        project.mkdir()
+        (project / "requirements.yaml").write_text(
+            textwrap.dedent(
+                """\
+                pip_indices:
+                  - https://${PRIVATE_INDEX_TOKEN}@private.example/simple/
+                dependencies:
+                  - pip: private-package
+                """,
+            ),
+        )
+        monkeypatch.delenv("PRIVATE_INDEX_TOKEN", raising=False)
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "unidep",
+                "install-all",
+                "--directory",
+                str(tmp_path),
+                "--depth",
+                "1",
+                "--dry-run",
+                "--editable",
+                "--skip-conda",
+                "--conda-env-name",
+                "test-env",
+            ],
+        )
+
+        with pytest.raises(SystemExit) as excinfo:
+            main()
+
+        captured = capsys.readouterr()
+        assert excinfo.value.code == 1
+        assert (
+            "Unresolved environment variable(s) PRIVATE_INDEX_TOKEN in pip_indices"
+            in captured.err
+        )
+        assert "Traceback" not in captured.err
 
     def test_full_workflow_with_indices(self, tmp_path: Path) -> None:
         """Test complete workflow from parsing to environment generation."""
