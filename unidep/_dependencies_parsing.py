@@ -13,9 +13,11 @@ from collections import defaultdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple, cast
 
+from packaging.version import InvalidVersion, Version
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
+from unidep._version import __version__
 from unidep.platform_definitions import Platform, Spec, platforms_from_selector
 from unidep.utils import (
     LocalDependency,
@@ -189,6 +191,27 @@ def _parse_overwrite_pins(overwrite_pins: list[str]) -> dict[str, str | None]:
     return result
 
 
+def _check_minimum_unidep_version(data: dict[str, Any], path: Path) -> None:
+    minimum = data.get("minimum_unidep_version")
+    if minimum is None:
+        return
+    if not isinstance(minimum, str):
+        msg = f"`minimum_unidep_version` in `{path}` must be a string."
+        raise TypeError(msg)
+    try:
+        minimum_version = Version(minimum)
+    except InvalidVersion as err:
+        msg = f"Invalid `minimum_unidep_version` in `{path}`: {minimum!r}."
+        raise ValueError(msg) from err
+    if Version(__version__) >= minimum_version:
+        return
+    msg = (
+        f"`{path}` requires unidep >= {minimum}, but this is unidep {__version__}. "
+        "Upgrade unidep to use this file."
+    )
+    raise RuntimeError(msg)
+
+
 def _collect_pip_indices(data: dict[str, Any]) -> list[str]:
     """Collect pip index URLs from the unidep config."""
     indices: list[str] = []
@@ -218,6 +241,7 @@ def _load(p: Path, yaml: YAML) -> dict[str, Any]:
             pyproject = tomllib.load(f)
             project_dependencies = pyproject.get("project", {}).get("dependencies", [])
             unidep_cfg = pyproject["tool"]["unidep"]
+            _check_minimum_unidep_version(unidep_cfg, p)
             if not project_dependencies:
                 return unidep_cfg
             unidep_dependencies = unidep_cfg.setdefault("dependencies", [])
@@ -232,7 +256,9 @@ def _load(p: Path, yaml: YAML) -> dict[str, Any]:
             )
             return unidep_cfg
     with p.open() as f:
-        return yaml.load(f)
+        data = yaml.load(f)
+        _check_minimum_unidep_version(data, p)
+        return data
 
 
 def _add_project_dependencies(
