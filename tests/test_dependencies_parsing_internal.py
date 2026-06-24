@@ -11,7 +11,6 @@ from unidep._dependencies_parsing import (
     _move_optional_dependencies_to_dependencies,
     parse_requirements,
 )
-from unidep._version import __version__
 from unidep.utils import PathWithExtras
 
 
@@ -61,13 +60,13 @@ def test_is_empty_git_submodule_false_for_non_directory(tmp_path: Path) -> None:
     assert _is_empty_git_submodule(file_path) is False
 
 
-def test_parse_requirements_allows_yaml_with_satisfied_minimum_unidep_version(
+def test_parse_requirements_allows_yaml_with_satisfied_requires_unidep(
     tmp_path: Path,
 ) -> None:
     req_file = tmp_path / "requirements.yaml"
     req_file.write_text(
-        f"""\
-        minimum_unidep_version: "{__version__}"
+        """\
+        requires_unidep: ">=3.4.1"
         dependencies:
           - numpy
         """,
@@ -84,7 +83,7 @@ def test_parse_requirements_allows_yaml_with_satisfied_minimum_unidep_version(
         (
             "requirements.yaml",
             """\
-            minimum_unidep_version: "999.0"
+            requires_unidep: ">=999.0"
             dependencies:
               - numpy
             """,
@@ -93,13 +92,13 @@ def test_parse_requirements_allows_yaml_with_satisfied_minimum_unidep_version(
             "pyproject.toml",
             """\
             [tool.unidep]
-            minimum_unidep_version = "999.0"
+            requires_unidep = ">=999.0"
             dependencies = ["numpy"]
             """,
         ),
     ],
 )
-def test_parse_requirements_rejects_files_requiring_newer_unidep(
+def test_parse_requirements_rejects_unsatisfied_requires_unidep(
     tmp_path: Path,
     filename: str,
     content: str,
@@ -107,17 +106,17 @@ def test_parse_requirements_rejects_files_requiring_newer_unidep(
     req_file = tmp_path / filename
     req_file.write_text(content)
 
-    with pytest.raises(RuntimeError, match=r"requires unidep >= 999\.0"):
+    with pytest.raises(RuntimeError, match=r"requires unidep >=999\.0"):
         parse_requirements(req_file)
 
 
-def test_parse_requirements_rejects_non_string_minimum_unidep_version(
+def test_parse_requirements_rejects_non_string_requires_unidep(
     tmp_path: Path,
 ) -> None:
     req_file = tmp_path / "requirements.yaml"
     req_file.write_text(
         """\
-        minimum_unidep_version: 3.4
+        requires_unidep: 3.4
         dependencies:
           - numpy
         """,
@@ -127,17 +126,33 @@ def test_parse_requirements_rejects_non_string_minimum_unidep_version(
         parse_requirements(req_file)
 
 
-def test_parse_requirements_rejects_invalid_minimum_unidep_version(
+def test_parse_requirements_rejects_invalid_requires_unidep(
     tmp_path: Path,
 ) -> None:
     req_file = tmp_path / "requirements.yaml"
     req_file.write_text(
         """\
-        minimum_unidep_version: "not-a-version"
+        requires_unidep: ">=not-a-version"
         dependencies:
           - numpy
         """,
     )
 
-    with pytest.raises(ValueError, match="Invalid `minimum_unidep_version`"):
+    with pytest.raises(ValueError, match="Invalid `requires_unidep`"):
+        parse_requirements(req_file)
+
+
+def test_parse_requirements_rejects_requires_unidep_without_operator(
+    tmp_path: Path,
+) -> None:
+    req_file = tmp_path / "requirements.yaml"
+    req_file.write_text(
+        """\
+        requires_unidep: "3.4.1"
+        dependencies:
+          - numpy
+        """,
+    )
+
+    with pytest.raises(ValueError, match="must start with a version operator"):
         parse_requirements(req_file)

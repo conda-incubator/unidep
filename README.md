@@ -171,7 +171,7 @@ Both files contain the following keys:
 - **optional_dependencies** (Optional): Dictionary with lists of optional dependencies.
 - **platforms** (Optional): List of platforms that are supported (used in `conda-lock`).
 - **pip_indices** (Optional): List of custom pip index URLs for private or alternative package repositories.
-- **minimum_unidep_version** (Optional): Minimum `unidep` version required to parse the file.
+- **requires_unidep** (Optional): Version specifier for the `unidep` version required to parse the file.
 
 Whether you use a `requirements.yaml` or `pyproject.toml` file, the same information can be specified in either.
 Choose the format that works best for your project.
@@ -184,7 +184,7 @@ Example of a `requirements.yaml` file:
 
 ```yaml
 name: example_environment
-minimum_unidep_version: "3.4.1"  # (Optional) require this unidep version or newer
+requires_unidep: ">=3.4.1"  # (Optional) require this unidep version or newer
 channels:
   - conda-forge
 dependencies:
@@ -225,7 +225,7 @@ pip_indices:  # (Optional) additional pip index URLs for private packages
 
 ```toml
 [tool.unidep]
-minimum_unidep_version = "3.4.1"  # (Optional) require this unidep version or newer
+requires_unidep = ">=3.4.1"  # (Optional) require this unidep version or newer
 channels = ["conda-forge"]
 dependencies = [
     "numpy",                                         # same name on conda and pip
@@ -274,7 +274,7 @@ See [Build System Integration](#jigsaw-build-system-integration) for more inform
 - Use `optional_dependencies:` to specify optional dependencies. Can be installed like `unidep install ".[test]"` or `pip install ".[test]"`.
 - Use `platforms:` to specify the platforms that are supported. If omitted, all platforms are assumed to be supported.
 - Use `pip_indices:` to specify additional pip index URLs for installing packages from private or alternative package repositories (see [Custom Pip Index URLs](#custom-pip-index-urls) below).
-- Use `minimum_unidep_version:` to fail early when a file needs a newer `unidep` parser.
+- Use `requires_unidep:` to fail early when a file needs a newer `unidep` parser.
 
 > *We use the YAML notation here, but the same information can be specified in `pyproject.toml` as well.*
 
