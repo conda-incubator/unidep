@@ -45,6 +45,20 @@ def test_rich_class_returns_none_when_rich_is_unavailable(
     assert _cli_output.rich_class("rich.text", "Text") is None
 
 
+def test_rich_class_returns_none_when_rich_parent_package_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def find_spec(name: str) -> object | None:
+        if name == "rich.console":
+            msg = "No module named 'rich'"
+            raise ModuleNotFoundError(msg)
+        return object()
+
+    monkeypatch.setattr(_cli_output.importlib.util, "find_spec", find_spec)
+
+    assert _cli_output.rich_class("rich.console", "Console") is None
+
+
 def test_install_output_auto_console_is_disabled_when_stdout_is_not_tty(
     capsys: pytest.CaptureFixture,
     monkeypatch: pytest.MonkeyPatch,
