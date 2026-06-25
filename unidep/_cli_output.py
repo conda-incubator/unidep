@@ -10,7 +10,11 @@ from typing import Any
 
 def rich_class(module_name: str, class_name: str) -> Any | None:
     """Return a Rich class if Rich is installed."""
-    if importlib.util.find_spec(module_name) is None:
+    try:
+        spec = importlib.util.find_spec(module_name)
+    except ModuleNotFoundError:
+        return None
+    if spec is None:
         return None
     module = importlib.import_module(module_name)
     return getattr(module, class_name, None)
