@@ -137,7 +137,7 @@ python_version = "3.9"
 
 # Use bump-my-version, e.g., call `bump-my-version bump minor`
 [tool.bumpversion]
-current_version = "3.4.1"
+current_version = "3.4.2"
 commit = true
 commit_args = "--no-verify"
 tag = true
