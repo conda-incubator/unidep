@@ -18,7 +18,10 @@ from unidep._env_vars import (
     collect_env_vars,
     resolve_env_var_commands,
 )
-from unidep._pip_indices import MissingPipIndexEnvironmentVariablesError
+from unidep._pip_indices import (
+    MissingPipIndexEnvironmentVariablesError,
+    normalize_pip_indices,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -226,6 +229,17 @@ def test_install_skip_pip_and_local_does_not_run_env_var_command(
 
     env_run.assert_not_called()
     assert "PRIVATE_REPO_TOKEN" not in os.environ
+
+
+def test_normalize_string_can_skip_environment_variable_validation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("PRIVATE_REPO_TOKEN", raising=False)
+
+    assert normalize_pip_indices(
+        "https://${PRIVATE_REPO_TOKEN}@private.example.com/simple/",
+        validate_env_vars=False,
+    ) == ("https://${PRIVATE_REPO_TOKEN}@private.example.com/simple/",)
 
 
 def test_install_keeps_existing_env_var_by_default(
