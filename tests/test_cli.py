@@ -56,9 +56,9 @@ from unidep._conda_env import CondaEnvironmentSpec
 from unidep._conda_lock import (
     _canonical_dependency_name,
     _conda_dependency_name,
-    _filter_env_spec_to_lock_skipped_pip_dependencies,
-    _parse_lock_skipped_dependencies,
     _pip_requirement_name,
+    filter_env_spec_to_lock_skipped_pip_dependencies,
+    parse_lock_skipped_dependencies,
 )
 from unidep._dependencies_parsing import parse_requirements
 from unidep._setuptools_integration import _deps
@@ -2272,7 +2272,7 @@ def test_parse_lock_skipped_dependencies_from_command_header(tmp_path: Path) -> 
         ),
     )
 
-    assert _parse_lock_skipped_dependencies(lock_file) == [
+    assert parse_lock_skipped_dependencies(lock_file) == [
         "acme.private-runtime",
         "acme.private-config",
     ]
@@ -2283,10 +2283,10 @@ def test_parse_lock_skipped_dependencies_handles_missing_and_malformed_lock(
 ) -> None:
     lock_file = tmp_path / "conda-lock.yml"
 
-    assert _parse_lock_skipped_dependencies(lock_file) == []
+    assert parse_lock_skipped_dependencies(lock_file) == []
 
     lock_file.write_text("version: 1\nmetadata: {}\npackage: []\n")
-    assert _parse_lock_skipped_dependencies(lock_file) == []
+    assert parse_lock_skipped_dependencies(lock_file) == []
 
     lock_file.write_text(
         textwrap.dedent(
@@ -2302,7 +2302,7 @@ def test_parse_lock_skipped_dependencies_handles_missing_and_malformed_lock(
             """,
         ),
     )
-    assert _parse_lock_skipped_dependencies(lock_file) == []
+    assert parse_lock_skipped_dependencies(lock_file) == []
 
 
 @pytest.mark.parametrize(
@@ -2321,7 +2321,7 @@ def test_parse_lock_skipped_dependencies_ignores_invalid_metadata_shapes(
     lock_file = tmp_path / "conda-lock.yml"
     lock_file.write_text(lock_text)
 
-    assert _parse_lock_skipped_dependencies(lock_file) == []
+    assert parse_lock_skipped_dependencies(lock_file) == []
 
 
 def test_lock_skipped_dependency_name_helpers() -> None:
@@ -2348,7 +2348,7 @@ def test_partial_lock_install_errors_for_skipped_conda_dependencies(
     )
 
     with pytest.raises(SystemExit):
-        _filter_env_spec_to_lock_skipped_pip_dependencies(env_spec, ["numpy"])
+        filter_env_spec_to_lock_skipped_pip_dependencies(env_spec, ["numpy"])
 
     output = capsys.readouterr().out
     assert "can only repair skipped pip dependencies" in output

@@ -351,14 +351,14 @@ def _parse_lock_metadata_skipped_dependencies(conda_lock_file: Path) -> list[str
     return [str(dependency) for dependency in skipped]
 
 
-def _parse_lock_skipped_dependencies(conda_lock_file: Path) -> list[str]:
+def parse_lock_skipped_dependencies(conda_lock_file: Path) -> list[str]:
     skipped = _parse_lock_metadata_skipped_dependencies(conda_lock_file)
     if skipped:
         return skipped
     return _parse_lock_header_skipped_dependencies(conda_lock_file)
 
 
-def _filter_env_spec_to_lock_skipped_pip_dependencies(
+def filter_env_spec_to_lock_skipped_pip_dependencies(
     env_spec: CondaEnvironmentSpec,
     skipped_dependencies: list[str],
 ) -> CondaEnvironmentSpec:

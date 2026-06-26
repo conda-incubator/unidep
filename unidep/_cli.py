@@ -30,9 +30,9 @@ from unidep._conda_env import (
     write_conda_environment_file,
 )
 from unidep._conda_lock import (
-    _filter_env_spec_to_lock_skipped_pip_dependencies,
-    _parse_lock_skipped_dependencies,
     conda_lock_command,
+    filter_env_spec_to_lock_skipped_pip_dependencies,
+    parse_lock_skipped_dependencies,
 )
 from unidep._dependencies_parsing import (
     DependencyEntry,
@@ -1312,9 +1312,9 @@ def _install_command(  # noqa: PLR0912, PLR0915
             verbose=verbose,
         )
         if not no_dependencies:
-            skipped_dependencies = _parse_lock_skipped_dependencies(conda_lock_file)
+            skipped_dependencies = parse_lock_skipped_dependencies(conda_lock_file)
             if skipped_dependencies:
-                env_spec = _filter_env_spec_to_lock_skipped_pip_dependencies(
+                env_spec = filter_env_spec_to_lock_skipped_pip_dependencies(
                     env_spec,
                     skipped_dependencies,
                 )
