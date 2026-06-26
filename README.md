@@ -934,8 +934,10 @@ options:
                         packages.
   -f, --conda-lock-file CONDA_LOCK_FILE
                         Path to the `conda-lock.yml` file to use for creating
-                        the new environment. Assumes that the lock file
-                        contains all dependencies. Must be used with `--conda-
+                        the new environment. If UniDep generated the lock with
+                        skipped pip dependencies, those dependencies are
+                        installed from source metadata after the locked
+                        environment is created. Must be used with `--conda-
                         env-name` or `--conda-env-prefix`.
   --no-uv               Disables the use of `uv` for pip install. By default,
                         `uv` is used if it is available in the PATH.
@@ -1026,8 +1028,10 @@ options:
                         packages.
   -f, --conda-lock-file CONDA_LOCK_FILE
                         Path to the `conda-lock.yml` file to use for creating
-                        the new environment. Assumes that the lock file
-                        contains all dependencies. Must be used with `--conda-
+                        the new environment. If UniDep generated the lock with
+                        skipped pip dependencies, those dependencies are
+                        installed from source metadata after the locked
+                        environment is created. Must be used with `--conda-
                         env-name` or `--conda-env-prefix`.
   --no-uv               Disables the use of `uv` for pip install. By default,
                         `uv` is used if it is available in the PATH.

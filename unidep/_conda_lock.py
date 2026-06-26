@@ -23,7 +23,12 @@ from unidep._dependency_selection import (
     collapse_selected_universals,
     select_conda_like_requirements,
 )
-from unidep.utils import add_comment_to_file, remove_top_comments, warn
+from unidep.utils import (
+    add_comment_to_file,
+    parse_package_str,
+    remove_top_comments,
+    warn,
+)
 
 if TYPE_CHECKING:
     from typing import Literal
@@ -82,6 +87,58 @@ def _run_conda_lock(
         sys.exit(1)
 
 
+def _add_unidep_lock_metadata(
+    conda_lock_output: Path,
+    skip_dependencies: list[str],
+) -> None:
+    if not skip_dependencies:
+        return
+    yaml = YAML(typ="rt")
+    yaml.default_flow_style = False
+    yaml.width = 4096
+    with conda_lock_output.open() as fp:
+        data = yaml.load(fp)
+    metadata = data.setdefault("metadata", {})
+    unidep_metadata = metadata.setdefault("unidep", {})
+    unidep_metadata["skipped_dependencies"] = list(dict.fromkeys(skip_dependencies))
+    with conda_lock_output.open("w") as fp:
+        yaml.dump(data, fp)
+
+
+def _ensure_pip_runtime_for_skipped_dependencies(
+    tmp_env: Path,
+    skip_dependencies: list[str],
+) -> None:
+    if not skip_dependencies:
+        return
+    yaml = YAML(typ="rt")
+    yaml.default_flow_style = False
+    yaml.width = 4096
+    with tmp_env.open() as fp:
+        data = yaml.load(fp)
+    dependencies = data.setdefault("dependencies", [])
+    has_pip = any(
+        isinstance(dependency, str) and parse_package_str(dependency).name == "pip"
+        for dependency in dependencies
+    )
+    if has_pip:
+        return
+    pip_section = next(
+        (
+            index
+            for index, dependency in enumerate(dependencies)
+            if isinstance(dependency, dict) and "pip" in dependency
+        ),
+        None,
+    )
+    if pip_section is None:
+        dependencies.append("pip")
+    else:
+        dependencies.insert(pip_section, "pip")
+    with tmp_env.open("w") as fp:
+        yaml.dump(data, fp)
+
+
 def _conda_lock_global(
     *,
     depth: int,
@@ -120,12 +177,14 @@ def _conda_lock_global(
         skip_dependencies=skip_dependencies,
         verbose=verbose,
     )
+    _ensure_pip_runtime_for_skipped_dependencies(tmp_env, skip_dependencies)
     _run_conda_lock(
         tmp_env,
         conda_lock_output,
         check_input_hash=check_input_hash,
         extra_flags=extra_flags,
     )
+    _add_unidep_lock_metadata(conda_lock_output, skip_dependencies)
     print(f"✅ Global dependencies locked successfully in `{conda_lock_output}`.")
     return conda_lock_output
 
@@ -427,6 +486,10 @@ def _conda_lock_subpackage(
         "platforms": platforms,
         "sources": [str(file)],
     }
+    if skip_dependencies:
+        metadata["unidep"] = {
+            "skipped_dependencies": list(dict.fromkeys(skip_dependencies)),
+        }
     with conda_lock_output.open("w") as fp:
         yaml.dump({"version": 1, "metadata": metadata, "package": locked}, fp)
     add_comment_to_file(
