@@ -47,22 +47,36 @@ def _expand_pip_indices_for_installer(pip_indices: Sequence[str]) -> tuple[str, 
     return tuple(os.path.expandvars(index) for index in pip_indices)
 
 
-def normalize_pip_indices(pip_indices: Sequence[str] | None) -> tuple[str, ...]:
+def normalize_pip_indices(
+    pip_indices: Sequence[str] | None,
+    *,
+    validate_env_vars: bool = True,
+) -> tuple[str, ...]:
     """Normalize configured pip index URLs without expanding secrets."""
     if pip_indices is None:
         return ()
+    if not validate_env_vars:
+        return tuple(pip_indices)
     if isinstance(pip_indices, str):
         return _validate_pip_indices_env_vars((pip_indices,))
     return _validate_pip_indices_env_vars(pip_indices)
 
 
-def build_pip_index_arguments(pip_indices: Sequence[str]) -> list[str]:
+def build_pip_index_arguments(
+    pip_indices: Sequence[str],
+    *,
+    expand_env_vars: bool = True,
+) -> list[str]:
     """Build pip/uv index arguments from pip_indices list."""
     args = []
     if pip_indices:
-        expanded_indices = _expand_pip_indices_for_installer(pip_indices)
-        args.extend(["--index-url", expanded_indices[0]])
-        for index in expanded_indices[1:]:
+        indices = (
+            _expand_pip_indices_for_installer(pip_indices)
+            if expand_env_vars
+            else tuple(pip_indices)
+        )
+        args.extend(["--index-url", indices[0]])
+        for index in indices[1:]:
             args.extend(["--extra-index-url", index])
     return args
 

@@ -57,6 +57,7 @@ Try it now and streamline your development process!
     - [How It Works](#how-it-works-1)
     - [Example Usage](#example-usage)
     - [Generated Output](#generated-output)
+    - [Resolving Environment Variables from Commands](#resolving-environment-variables-from-commands)
   - [`[project.dependencies]` in `pyproject.toml` handling](#projectdependencies-in-pyprojecttoml-handling)
 - [:jigsaw: Build System Integration](#jigsaw-build-system-integration)
   - [Local Dependencies in Monorepos](#local-dependencies-in-monorepos)
@@ -451,6 +452,40 @@ dependencies:
 
 > [!TIP]
 > Store sensitive credentials in environment variables rather than hardcoding them in configuration files. UniDep validates `${VAR_NAME}` patterns and expands them only when invoking installers.
+
+#### Resolving Environment Variables from Commands
+
+If a private index token can be produced by a command, configure `env_vars`:
+
+```yaml
+# requirements.yaml
+env_vars:
+  PRIVATE_REPO_TOKEN:
+    command:
+      - gcloud
+      - auth
+      - print-access-token
+    refresh: always
+
+pip_indices:
+  - https://token:${PRIVATE_REPO_TOKEN}@private.example.com/simple/
+```
+
+```toml
+# pyproject.toml
+[tool.unidep]
+pip_indices = ["https://token:${PRIVATE_REPO_TOKEN}@private.example.com/simple/"]
+
+[tool.unidep.env_vars.PRIVATE_REPO_TOKEN]
+command = ["gcloud", "auth", "print-access-token"]
+refresh = "always"
+```
+
+`command` must be a list of arguments, not a shell string.
+UniDep captures stdout, strips surrounding whitespace, and uses it as the environment variable value.
+`refresh` defaults to `missing`, which skips the command when the variable already exists.
+Use `refresh: always` for short-lived tokens.
+Use `--no-env-commands` to skip configured commands and rely only on existing environment variables.
 
 ### `[project.dependencies]` in `pyproject.toml` handling
 
@@ -871,7 +906,7 @@ usage: unidep install [-h] [-v] [-e] [--skip-local] [--skip-pip]
                       [-n CONDA_ENV_NAME | -p CONDA_ENV_PREFIX] [--dry-run]
                       [--ignore-pin IGNORE_PIN]
                       [--overwrite-pin OVERWRITE_PIN] [-f CONDA_LOCK_FILE]
-                      [--no-uv]
+                      [--no-uv] [--no-env-commands]
                       files [files ...]
 
 Automatically install all dependencies from one or more `requirements.yaml` or
@@ -939,6 +974,8 @@ options:
                         env-name` or `--conda-env-prefix`.
   --no-uv               Disables the use of `uv` for pip install. By default,
                         `uv` is used if it is available in the PATH.
+  --no-env-commands     Skip `env_vars` command entries while resolving
+                        installer environment variables.
 ```
 
 <!-- OUTPUT:END -->
@@ -963,7 +1000,7 @@ usage: unidep install [-h] [-v] [-e] [--skip-local] [--skip-pip]
                       [-n CONDA_ENV_NAME | -p CONDA_ENV_PREFIX] [--dry-run]
                       [--ignore-pin IGNORE_PIN]
                       [--overwrite-pin OVERWRITE_PIN] [-f CONDA_LOCK_FILE]
-                      [--no-uv]
+                      [--no-uv] [--no-env-commands]
                       files [files ...]
 
 Automatically install all dependencies from one or more `requirements.yaml` or
@@ -1031,6 +1068,8 @@ options:
                         env-name` or `--conda-env-prefix`.
   --no-uv               Disables the use of `uv` for pip install. By default,
                         `uv` is used if it is available in the PATH.
+  --no-env-commands     Skip `env_vars` command entries while resolving
+                        installer environment variables.
 ```
 
 <!-- OUTPUT:END -->

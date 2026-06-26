@@ -37,6 +37,7 @@ from unidep._dependencies_parsing import (
     parse_requirements,
 )
 from unidep._doctor import run_doctor_command
+from unidep._env_vars import EnvVarCommandError, resolve_env_var_commands
 from unidep._pip_indices import (
     MissingPipIndexEnvironmentVariablesError,
     build_pip_index_arguments,
@@ -353,6 +354,13 @@ def _add_common_args(  # noqa: PLR0912, C901
             help="Disables the use of `uv` for pip install. By default, `uv` is used"
             " if it is available in the PATH.",
         )
+    if "no-env-commands" in options:
+        sub_parser.add_argument(
+            "--no-env-commands",
+            action="store_true",
+            help="Skip `env_vars` command entries while resolving installer"
+            " environment variables.",
+        )
 
 
 def _add_extra_flags(
@@ -497,6 +505,7 @@ def _parse_args() -> argparse.Namespace:  # noqa: PLR0915
             "skip-dependency",
             "overwrite-pin",
             "no-uv",
+            "no-env-commands",
             "verbose",
         },
     )
@@ -541,6 +550,7 @@ def _parse_args() -> argparse.Namespace:  # noqa: PLR0915
             "skip-dependency",
             "overwrite-pin",
             "no-uv",
+            "no-env-commands",
             "verbose",
         },
     )
@@ -1156,7 +1166,10 @@ def _pip_install_local(
     pip_indices: Sequence[str] | None = None,
     flags: list[str] | None = None,
 ) -> None:  # pragma: no cover
-    index_args = build_pip_index_arguments(pip_indices or [])
+    index_args = build_pip_index_arguments(
+        pip_indices or [],
+        expand_env_vars=not dry_run,
+    )
     if _use_uv(no_uv):
         pip_command = [
             *conda_run,
@@ -1267,6 +1280,7 @@ def _install_command(  # noqa: PLR0912, PLR0915
     overwrite_pins: list[str] | None = None,
     skip_dependencies: list[str] | None = None,
     no_uv: bool = True,
+    no_env_commands: bool = False,
     verbose: bool = False,
 ) -> None:
     """Install the dependencies of a single `requirements.yaml` or `pyproject.toml` file."""  # noqa: E501
@@ -1290,7 +1304,10 @@ def _install_command(  # noqa: PLR0912, PLR0915
         requirements.channels,
         requirements.pip_indices,
         platforms=platforms,
+        validate_pip_index_env_vars=False,
     )
+    if dry_run and env_spec.pip_indices and not requirements.env_vars:
+        build_pip_index_arguments(env_spec.pip_indices)
     if not conda_executable:  # None or empty string
         conda_executable = _maybe_conda_executable()
     if conda_lock_file:  # As late as possible to error out early in previous steps
@@ -1315,6 +1332,18 @@ def _install_command(  # noqa: PLR0912, PLR0915
         local_paths = _collect_installable_local_paths(
             paths_with_extras,
             verbose=verbose,
+        )
+    if (
+        env_spec.pip_indices
+        and not dry_run
+        and not no_dependencies
+        and ((env_spec.pip and not skip_pip) or local_paths.all_paths)
+    ):
+        os.environ.update(
+            resolve_env_var_commands(
+                requirements.env_vars or {},
+                no_env_commands=no_env_commands,
+            ),
         )
     conda_dependencies = _conda_dependencies_with_required_pip(
         env_spec.conda,
@@ -1352,14 +1381,18 @@ def _install_command(  # noqa: PLR0912, PLR0915
         )
         if not dry_run:  # pragma: no cover
             subprocess.run((*conda_command, *conda_dependencies), check=True)
-    python_executable = _python_executable(
-        conda_executable,
-        conda_env_name,
-        conda_env_prefix,
-    )
+    python_executable: str | None = None
     if env_spec.pip and not skip_pip:
         conda_run = _maybe_conda_run(conda_executable, conda_env_name, conda_env_prefix)
-        index_args = build_pip_index_arguments(env_spec.pip_indices)
+        index_args = build_pip_index_arguments(
+            env_spec.pip_indices,
+            expand_env_vars=not dry_run,
+        )
+        python_executable = _python_executable(
+            conda_executable,
+            conda_env_name,
+            conda_env_prefix,
+        )
         use_uv = _use_uv(no_uv)
         # uv resolves the whole command up front. Local dependencies must be
         # direct requirements here; the later --no-deps editable install is too
@@ -1407,6 +1440,12 @@ def _install_command(  # noqa: PLR0912, PLR0915
             conda_env_name,
             conda_env_prefix,
         )
+        if python_executable is None:
+            python_executable = _python_executable(
+                conda_executable,
+                conda_env_name,
+                conda_env_prefix,
+            )
         _pip_install_local(
             *sorted(local_paths.all_paths),
             editable=editable,
@@ -1414,7 +1453,7 @@ def _install_command(  # noqa: PLR0912, PLR0915
             python_executable=python_executable,
             flags=pip_flags,
             no_uv=no_uv,
-            pip_indices=env_spec.pip_indices,
+            pip_indices=() if no_dependencies else env_spec.pip_indices,
             conda_run=conda_run,
         )
 
@@ -1442,6 +1481,7 @@ def _install_all_command(
     overwrite_pins: list[str] | None = None,
     skip_dependencies: list[str] | None = None,
     no_uv: bool = True,
+    no_env_commands: bool = False,
     verbose: bool = False,
 ) -> None:  # pragma: no cover
     found_files = find_requirements_files(
@@ -1468,6 +1508,7 @@ def _install_all_command(
         overwrite_pins=overwrite_pins,
         skip_dependencies=skip_dependencies,
         no_uv=no_uv,
+        no_env_commands=no_env_commands,
         verbose=verbose,
     )
 
@@ -1964,6 +2005,7 @@ def _main() -> None:  # noqa: PLR0912
             skip_dependencies=args.skip_dependency,
             overwrite_pins=args.overwrite_pin,
             no_uv=args.no_uv,
+            no_env_commands=args.no_env_commands,
             verbose=args.verbose,
         )
     elif args.command == "install-all":
@@ -1986,6 +2028,7 @@ def _main() -> None:  # noqa: PLR0912
             skip_dependencies=args.skip_dependency,
             overwrite_pins=args.overwrite_pin,
             no_uv=args.no_uv,
+            no_env_commands=args.no_env_commands,
             verbose=args.verbose,
         )
     elif args.command == "conda-lock":  # pragma: no cover
@@ -2053,6 +2096,9 @@ def main() -> None:
     """Run the command-line tool with user-facing error reporting."""
     try:
         _main()
-    except MissingPipIndexEnvironmentVariablesError as error:
+    except (
+        MissingPipIndexEnvironmentVariablesError,
+        EnvVarCommandError,
+    ) as error:
         print(f"❌ {error}", file=sys.stderr)
         sys.exit(1)
