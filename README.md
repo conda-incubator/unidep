@@ -482,11 +482,11 @@ command = ["gcloud", "auth", "print-access-token"]
 refresh = "always"
 ```
 
-`command` must be a list of arguments, not a shell string. UniDep captures
-stdout, strips surrounding whitespace, and uses it as the environment variable
-value. `refresh` defaults to `missing`, which skips the command when the variable
-already exists. Use `refresh: always` for short-lived tokens. Commands never run
-unless `--allow-env-commands` is passed.
+`command` must be a list of arguments, not a shell string.
+UniDep captures stdout, strips surrounding whitespace, and uses it as the environment variable value.
+`refresh` defaults to `missing`, which skips the command when the variable already exists.
+Use `refresh: always` for short-lived tokens.
+Commands never run unless `--allow-env-commands` is passed.
 
 ### `[project.dependencies]` in `pyproject.toml` handling
 
