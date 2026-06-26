@@ -18,6 +18,7 @@ from unidep._conda_lock import (
     _conda_lock_subpackage,
     _conda_lock_subpackages,
     _download_and_get_package_names,
+    _ensure_pip_runtime_for_skipped_dependencies,
     _handle_missing_keys,
     _parse_conda_lock_packages,
     conda_lock_command,
@@ -321,6 +322,76 @@ dependencies = []
     assert "Missing keys" not in out
     assert "private-config" not in out
     assert "private-runtime" not in out
+    with YAML(typ="safe") as yaml:
+        with (tmp_path / "conda-lock.yml").open() as fp:
+            global_lock = yaml.load(fp)
+        with (app / "conda-lock.yml").open() as fp:
+            app_lock = yaml.load(fp)
+    expected_skipped = ["private-config", "private-runtime"]
+    assert global_lock["metadata"]["unidep"]["skipped_dependencies"] == expected_skipped
+    assert app_lock["metadata"]["unidep"]["skipped_dependencies"] == expected_skipped
+
+
+def test_conda_lock_with_only_skipped_pip_deps_keeps_pip_runtime(
+    tmp_path: Path,
+) -> None:
+    req_file = _write_private_index_project(
+        tmp_path,
+        """\
+    { pip = "private-runtime" },
+""",
+        auth_value="fixed",
+    )
+
+    def fake_run_conda_lock(
+        tmp_env: Path,
+        conda_lock_output: Path,
+        *,
+        check_input_hash: bool,
+        extra_flags: list[str],
+    ) -> None:
+        del check_input_hash, extra_flags
+        with YAML(typ="safe") as yaml, tmp_env.open() as fp:
+            env = yaml.load(fp)
+        assert "pip" in env["dependencies"]
+        _write_fake_lock_file(conda_lock_output, [])
+
+    with patch("unidep._conda_lock._run_conda_lock", side_effect=fake_run_conda_lock):
+        conda_lock_command(
+            depth=1,
+            directory=tmp_path,
+            files=[req_file],
+            platforms=["linux-64"],
+            verbose=False,
+            only_global=True,
+            check_input_hash=False,
+            ignore_pins=[],
+            overwrite_pins=[],
+            skip_dependencies=["private-runtime"],
+            extra_flags=[],
+        )
+
+
+def test_ensure_pip_runtime_for_skipped_dependencies_does_not_duplicate_pip(
+    tmp_path: Path,
+) -> None:
+    tmp_env = tmp_path / "environment.yaml"
+    tmp_env.write_text(
+        """\
+name: test
+dependencies:
+  - pip >=24
+  - pip:
+      - public-helper
+""",
+    )
+
+    _ensure_pip_runtime_for_skipped_dependencies(tmp_env, ["private-runtime"])
+
+    with YAML(typ="safe") as yaml, tmp_env.open() as fp:
+        env = yaml.load(fp)
+    assert env["dependencies"].count("pip >=24") == 1
+    assert "pip" not in env["dependencies"]
 
 
 def test_conda_lock_fails_before_lock_when_pip_index_env_var_is_unset(

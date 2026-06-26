@@ -52,6 +52,14 @@ from unidep._cli import (
     _print_with_rich,
     main,
 )
+from unidep._conda_env import CondaEnvironmentSpec
+from unidep._conda_lock import (
+    _canonical_dependency_name,
+    _conda_dependency_name,
+    _pip_requirement_name,
+    filter_env_spec_to_lock_skipped_pip_dependencies,
+    parse_lock_skipped_dependencies,
+)
 from unidep._dependencies_parsing import parse_requirements
 from unidep._setuptools_integration import _deps
 
@@ -2151,6 +2159,200 @@ def test_install_command_with_conda_lock_skips_dependency_install(
     output = capsys.readouterr().out
     assert "Installing conda dependencies" not in output
     assert "Installing pip dependencies" not in output
+
+
+@patch("unidep._cli._use_uv")
+def test_install_command_with_partial_conda_lock_installs_skipped_pip_deps(
+    mock_use_uv: Any,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    mock_use_uv.return_value = True
+    monkeypatch.setenv("PRIVATE_INDEX_TOKEN", "secret-token")
+    app = tmp_path / "app"
+    lib = tmp_path / "lib"
+    _write_editable_install_order_pyproject(lib, name="pkg-a")
+    _write_editable_install_order_pyproject(
+        app,
+        name="pkg-b",
+        unidep_config="""
+            [tool.unidep]
+            dependencies = [
+                { pip = "acme.private-runtime" },
+                { pip = "public-helper" },
+            ]
+            pip_indices = [
+                "https://${PRIVATE_INDEX_TOKEN}@private.example/simple/",
+                "https://pypi.org/simple/",
+            ]
+            local_dependencies = [
+                { local = "../lib", pypi = "pkg-a" },
+            ]
+        """,
+    )
+    lock_file = tmp_path / "conda-lock.yml"
+    lock_file.write_text(
+        textwrap.dedent(
+            """\
+            version: 1
+            metadata:
+              channels:
+                - url: conda-forge
+              platforms:
+                - linux-64
+              unidep:
+                skipped_dependencies:
+                  - acme.private-runtime
+            package: []
+            """,
+        ),
+    )
+    created: list[Path] = []
+
+    def fake_create_env_from_lock(
+        conda_lock_file: Path,
+        _conda_executable: str,
+        **_: object,
+    ) -> None:
+        created.append(conda_lock_file)
+
+    monkeypatch.setattr("unidep._cli._create_env_from_lock", fake_create_env_from_lock)
+    monkeypatch.setattr("unidep._cli.identify_current_platform", lambda: "linux-64")
+    monkeypatch.setattr("unidep._cli._python_executable", lambda *_: "python")
+
+    _install_command(
+        app,
+        lib,
+        conda_executable="micromamba",
+        conda_env_name="test-env",
+        conda_env_prefix=None,
+        conda_lock_file=lock_file,
+        dry_run=True,
+        editable=True,
+        no_uv=False,
+        verbose=False,
+    )
+
+    output = capsys.readouterr().out
+    commands = re.findall(r"with `([^`]+)`", output)
+    pip_dependency_commands = [
+        cmd
+        for cmd in commands
+        if "uv pip install" in cmd and "acme.private-runtime" in cmd
+    ]
+    assert created == [lock_file]
+    assert len(pip_dependency_commands) == 1
+    pip_dependency_command = pip_dependency_commands[0]
+    assert f"-e {lib}" in pip_dependency_command
+    assert "public-helper" not in pip_dependency_command
+    assert "secret-token" not in output
+    assert "Installing conda dependencies" not in output
+
+
+def test_parse_lock_skipped_dependencies_from_command_header(tmp_path: Path) -> None:
+    lock_file = tmp_path / "conda-lock.yml"
+    generated_header = (
+        "# This file is created and managed by `unidep` 3.4.1.\n"
+        "# File generated with: `unidep conda-lock -d . "
+        "--skip-dependency acme.private-runtime "
+        "--skip-dependency=acme.private-config`\n\n"
+    )
+    lock_file.write_text(
+        generated_header
+        + textwrap.dedent(
+            """\
+            version: 1
+            metadata:
+              channels: []
+              platforms:
+                - linux-64
+            package: []
+            """,
+        ),
+    )
+
+    assert parse_lock_skipped_dependencies(lock_file) == [
+        "acme.private-runtime",
+        "acme.private-config",
+    ]
+
+
+def test_parse_lock_skipped_dependencies_handles_missing_and_malformed_lock(
+    tmp_path: Path,
+) -> None:
+    lock_file = tmp_path / "conda-lock.yml"
+
+    assert parse_lock_skipped_dependencies(lock_file) == []
+
+    lock_file.write_text("version: 1\nmetadata: {}\npackage: []\n")
+    assert parse_lock_skipped_dependencies(lock_file) == []
+
+    lock_file.write_text(
+        textwrap.dedent(
+            """\
+            # ordinary comment
+            # File generated with: unidep conda-lock
+            # File generated with: `unidep conda-lock --skip-dependency 'open`
+            # File generated with: `unidep conda-lock`
+
+            version: 1
+            metadata: {}
+            package: []
+            """,
+        ),
+    )
+    assert parse_lock_skipped_dependencies(lock_file) == []
+
+
+@pytest.mark.parametrize(
+    "lock_text",
+    [
+        "[]\n",
+        "version: 1\nmetadata: []\npackage: []\n",
+        "version: 1\nmetadata:\n  unidep: []\npackage: []\n",
+        "version: 1\nmetadata:\n  unidep:\n    skipped_dependencies: private\npackage: []\n",
+    ],
+)
+def test_parse_lock_skipped_dependencies_ignores_invalid_metadata_shapes(
+    tmp_path: Path,
+    lock_text: str,
+) -> None:
+    lock_file = tmp_path / "conda-lock.yml"
+    lock_file.write_text(lock_text)
+
+    assert parse_lock_skipped_dependencies(lock_file) == []
+
+
+def test_lock_skipped_dependency_name_helpers() -> None:
+    assert _canonical_dependency_name("Acme.Private[extra]") == "acme-private"
+    assert (
+        _pip_requirement_name(
+            "Acme.Private[extra] >=1; python_version >= '3.11'",
+        )
+        == "acme-private"
+    )
+    assert _pip_requirement_name("Acme.Private >=1:linux64") == "acme-private"
+    assert _conda_dependency_name({"sel(linux)": "ZLib >=1"}) == "zlib"
+
+
+def test_partial_lock_install_errors_for_skipped_conda_dependencies(
+    capsys: pytest.CaptureFixture,
+) -> None:
+    env_spec = CondaEnvironmentSpec(
+        channels=[],
+        platforms=["linux-64"],
+        conda=["numpy >=1"],
+        pip=[],
+        pip_indices=(),
+    )
+
+    with pytest.raises(SystemExit):
+        filter_env_spec_to_lock_skipped_pip_dependencies(env_spec, ["numpy"])
+
+    output = capsys.readouterr().out
+    assert "can only repair skipped pip dependencies" in output
+    assert "numpy >=1" in output
 
 
 def test_unidep_merge_cli_optional_dependencies(tmp_path: Path) -> None:

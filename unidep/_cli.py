@@ -25,10 +25,15 @@ from ruamel.yaml import YAML
 
 from unidep._cli_output import print_command, print_phase, rich_class
 from unidep._conda_env import (
+    CondaEnvironmentSpec,
     create_conda_env_specification,
     write_conda_environment_file,
 )
-from unidep._conda_lock import conda_lock_command
+from unidep._conda_lock import (
+    conda_lock_command,
+    filter_env_spec_to_lock_skipped_pip_dependencies,
+    parse_lock_skipped_dependencies,
+)
 from unidep._dependencies_parsing import (
     DependencyEntry,
     _load,
@@ -343,7 +348,9 @@ def _add_common_args(  # noqa: PLR0912, C901
             "--conda-lock-file",
             type=Path,
             help="Path to the `conda-lock.yml` file to use for creating the new"
-            " environment. Assumes that the lock file contains all dependencies."
+            " environment. If UniDep generated the lock with skipped pip"
+            " dependencies, those dependencies are installed from source metadata"
+            " after the locked environment is created."
             " Must be used with `--conda-env-name` or `--conda-env-prefix`.",
         )
     if "no-uv" in options:
@@ -1124,6 +1131,7 @@ def _run_with_redacted_command(command: Sequence[str | Path]) -> None:
         raise
 
 
+
 def _pip_install_local_arguments(
     folders: Sequence[str | Path],
     *,
@@ -1303,7 +1311,16 @@ def _install_command(  # noqa: PLR0912, PLR0915
             dry_run=dry_run,
             verbose=verbose,
         )
-        no_dependencies = True  # Assume the lock file has all dependencies
+        if not no_dependencies:
+            skipped_dependencies = parse_lock_skipped_dependencies(conda_lock_file)
+            if skipped_dependencies:
+                env_spec = filter_env_spec_to_lock_skipped_pip_dependencies(
+                    env_spec,
+                    skipped_dependencies,
+                )
+                skip_conda = True
+            else:
+                no_dependencies = True  # Assume the lock file has all dependencies
 
     if no_dependencies:
         skip_pip = True
