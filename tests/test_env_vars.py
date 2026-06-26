@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from typing import TYPE_CHECKING, Any
@@ -129,6 +130,102 @@ def test_install_no_env_commands_skips_command_and_reports_missing_var(
         )
 
     env_run.assert_not_called()
+
+
+def test_install_dry_run_does_not_run_env_var_command(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    monkeypatch.delenv("PRIVATE_REPO_TOKEN", raising=False)
+    req_file = _write_private_index_project(tmp_path)
+
+    with (
+        patch("unidep._cli._maybe_conda_executable", return_value=None),
+        patch("unidep._env_vars.subprocess.run") as env_run,
+    ):
+        _install_command(
+            req_file,
+            conda_executable=None,
+            conda_env_name=None,
+            conda_env_prefix=None,
+            conda_lock_file=None,
+            dry_run=True,
+            editable=False,
+            skip_local=True,
+            skip_pip=False,
+            skip_conda=True,
+            no_dependencies=False,
+            no_uv=True,
+            verbose=False,
+        )
+
+    out = capsys.readouterr().out
+    env_run.assert_not_called()
+    assert "https://***@private.example.com/simple/" in out
+    assert "PRIVATE_REPO_TOKEN" not in os.environ
+
+
+def test_install_no_dependencies_does_not_run_env_var_command(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.delenv("PRIVATE_REPO_TOKEN", raising=False)
+    req_file = _write_private_index_project(tmp_path)
+
+    with (
+        patch("unidep._cli._maybe_conda_executable", return_value=None),
+        patch("unidep._env_vars.subprocess.run") as env_run,
+    ):
+        _install_command(
+            req_file,
+            conda_executable=None,
+            conda_env_name=None,
+            conda_env_prefix=None,
+            conda_lock_file=None,
+            dry_run=False,
+            editable=False,
+            skip_local=True,
+            skip_pip=False,
+            skip_conda=False,
+            no_dependencies=True,
+            no_uv=True,
+            verbose=False,
+        )
+
+    env_run.assert_not_called()
+    assert "PRIVATE_REPO_TOKEN" not in os.environ
+
+
+def test_install_skip_pip_and_local_does_not_run_env_var_command(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.delenv("PRIVATE_REPO_TOKEN", raising=False)
+    req_file = _write_private_index_project(tmp_path)
+
+    with (
+        patch("unidep._cli._maybe_conda_executable", return_value=None),
+        patch("unidep._env_vars.subprocess.run") as env_run,
+    ):
+        _install_command(
+            req_file,
+            conda_executable=None,
+            conda_env_name=None,
+            conda_env_prefix=None,
+            conda_lock_file=None,
+            dry_run=False,
+            editable=False,
+            skip_local=True,
+            skip_pip=True,
+            skip_conda=True,
+            no_dependencies=False,
+            no_uv=True,
+            verbose=False,
+        )
+
+    env_run.assert_not_called()
+    assert "PRIVATE_REPO_TOKEN" not in os.environ
 
 
 def test_install_keeps_existing_env_var_by_default(

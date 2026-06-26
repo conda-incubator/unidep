@@ -1169,7 +1169,10 @@ def _pip_install_local(
     pip_indices: Sequence[str] | None = None,
     flags: list[str] | None = None,
 ) -> None:  # pragma: no cover
-    index_args = build_pip_index_arguments(pip_indices or [])
+    index_args = build_pip_index_arguments(
+        pip_indices or [],
+        expand_env_vars=not dry_run,
+    )
     if _use_uv(no_uv):
         pip_command = [
             *conda_run,
@@ -1294,12 +1297,6 @@ def _install_command(  # noqa: PLR0912, PLR0915
         verbose=verbose,
         extras=[f.extras for f in paths_with_extras],
     )
-    os.environ.update(
-        resolve_env_var_commands(
-            requirements.env_vars or {},
-            no_env_commands=no_env_commands,
-        ),
-    )
     platforms = [identify_current_platform()]
     env_entries = _flatten_selected_dependency_entries(
         requirements.dependency_entries,
@@ -1310,7 +1307,10 @@ def _install_command(  # noqa: PLR0912, PLR0915
         requirements.channels,
         requirements.pip_indices,
         platforms=platforms,
+        validate_pip_index_env_vars=False,
     )
+    if dry_run and env_spec.pip_indices and not requirements.env_vars:
+        build_pip_index_arguments(env_spec.pip_indices)
     if not conda_executable:  # None or empty string
         conda_executable = _maybe_conda_executable()
     if conda_lock_file:  # As late as possible to error out early in previous steps
@@ -1335,6 +1335,18 @@ def _install_command(  # noqa: PLR0912, PLR0915
         local_paths = _collect_installable_local_paths(
             paths_with_extras,
             verbose=verbose,
+        )
+    if (
+        env_spec.pip_indices
+        and not dry_run
+        and not no_dependencies
+        and ((env_spec.pip and not skip_pip) or local_paths.all_paths)
+    ):
+        os.environ.update(
+            resolve_env_var_commands(
+                requirements.env_vars or {},
+                no_env_commands=no_env_commands,
+            ),
         )
     conda_dependencies = _conda_dependencies_with_required_pip(
         env_spec.conda,
@@ -1372,14 +1384,18 @@ def _install_command(  # noqa: PLR0912, PLR0915
         )
         if not dry_run:  # pragma: no cover
             subprocess.run((*conda_command, *conda_dependencies), check=True)
-    python_executable = _python_executable(
-        conda_executable,
-        conda_env_name,
-        conda_env_prefix,
-    )
+    python_executable: str | None = None
     if env_spec.pip and not skip_pip:
         conda_run = _maybe_conda_run(conda_executable, conda_env_name, conda_env_prefix)
-        index_args = build_pip_index_arguments(env_spec.pip_indices)
+        index_args = build_pip_index_arguments(
+            env_spec.pip_indices,
+            expand_env_vars=not dry_run,
+        )
+        python_executable = _python_executable(
+            conda_executable,
+            conda_env_name,
+            conda_env_prefix,
+        )
         use_uv = _use_uv(no_uv)
         # uv resolves the whole command up front. Local dependencies must be
         # direct requirements here; the later --no-deps editable install is too
@@ -1427,6 +1443,12 @@ def _install_command(  # noqa: PLR0912, PLR0915
             conda_env_name,
             conda_env_prefix,
         )
+        if python_executable is None:
+            python_executable = _python_executable(
+                conda_executable,
+                conda_env_name,
+                conda_env_prefix,
+            )
         _pip_install_local(
             *sorted(local_paths.all_paths),
             editable=editable,
@@ -1434,7 +1456,7 @@ def _install_command(  # noqa: PLR0912, PLR0915
             python_executable=python_executable,
             flags=pip_flags,
             no_uv=no_uv,
-            pip_indices=env_spec.pip_indices,
+            pip_indices=() if no_dependencies else env_spec.pip_indices,
             conda_run=conda_run,
         )
 

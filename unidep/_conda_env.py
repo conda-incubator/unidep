@@ -138,6 +138,7 @@ def create_conda_env_specification(  # noqa: C901, PLR0912, PLR0915
     platforms: Sequence[Platform] | None = None,
     selector: Literal["sel", "comment"] = "sel",
     pip_indices: Sequence[str] | None = None,
+    validate_pip_index_env_vars: bool = True,
 ) -> CondaEnvironmentSpec:
     """Create a conda environment specification from dependency entries.
 
@@ -195,7 +196,10 @@ def create_conda_env_specification(  # noqa: C901, PLR0912, PLR0915
 
     entries = _as_dependency_entries(entries)
     conda, pip = _extract_conda_pip_dependencies(entries, resolved_platforms)
-    normalized_pip_indices = normalize_pip_indices(pip_indices)
+    normalized_pip_indices = normalize_pip_indices(
+        pip_indices,
+        validate_env_vars=validate_pip_index_env_vars,
+    )
 
     conda_deps: list[str | dict[str, str]] = CommentedSeq()
     pip_deps: list[str] = CommentedSeq()
