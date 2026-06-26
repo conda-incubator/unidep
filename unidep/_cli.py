@@ -37,10 +37,7 @@ from unidep._dependencies_parsing import (
     parse_requirements,
 )
 from unidep._doctor import run_doctor_command
-from unidep._env_vars import (
-    EnvVarCommandError,
-    resolve_env_var_commands,
-)
+from unidep._env_vars import EnvVarCommandError, resolve_env_var_commands
 from unidep._pip_indices import (
     MissingPipIndexEnvironmentVariablesError,
     build_pip_index_arguments,
