@@ -37,6 +37,11 @@ from unidep._dependencies_parsing import (
     parse_requirements,
 )
 from unidep._doctor import run_doctor_command
+from unidep._env_vars import (
+    EnvVarCommandError,
+    EnvVarCommandPermissionError,
+    resolve_env_var_commands,
+)
 from unidep._pip_indices import (
     MissingPipIndexEnvironmentVariablesError,
     build_pip_index_arguments,
@@ -353,6 +358,13 @@ def _add_common_args(  # noqa: PLR0912, C901
             help="Disables the use of `uv` for pip install. By default, `uv` is used"
             " if it is available in the PATH.",
         )
+    if "allow-env-commands" in options:
+        sub_parser.add_argument(
+            "--allow-env-commands",
+            action="store_true",
+            help="Allow `env_vars` command entries to run while resolving installer"
+            " environment variables.",
+        )
 
 
 def _add_extra_flags(
@@ -497,6 +509,7 @@ def _parse_args() -> argparse.Namespace:  # noqa: PLR0915
             "skip-dependency",
             "overwrite-pin",
             "no-uv",
+            "allow-env-commands",
             "verbose",
         },
     )
@@ -541,6 +554,7 @@ def _parse_args() -> argparse.Namespace:  # noqa: PLR0915
             "skip-dependency",
             "overwrite-pin",
             "no-uv",
+            "allow-env-commands",
             "verbose",
         },
     )
@@ -1267,6 +1281,7 @@ def _install_command(  # noqa: PLR0912, PLR0915
     overwrite_pins: list[str] | None = None,
     skip_dependencies: list[str] | None = None,
     no_uv: bool = True,
+    allow_env_commands: bool = False,
     verbose: bool = False,
 ) -> None:
     """Install the dependencies of a single `requirements.yaml` or `pyproject.toml` file."""  # noqa: E501
@@ -1279,6 +1294,12 @@ def _install_command(  # noqa: PLR0912, PLR0915
         skip_dependencies=skip_dependencies,
         verbose=verbose,
         extras=[f.extras for f in paths_with_extras],
+    )
+    os.environ.update(
+        resolve_env_var_commands(
+            requirements.env_vars or {},
+            allow_commands=allow_env_commands,
+        ),
     )
     platforms = [identify_current_platform()]
     env_entries = _flatten_selected_dependency_entries(
@@ -1442,6 +1463,7 @@ def _install_all_command(
     overwrite_pins: list[str] | None = None,
     skip_dependencies: list[str] | None = None,
     no_uv: bool = True,
+    allow_env_commands: bool = False,
     verbose: bool = False,
 ) -> None:  # pragma: no cover
     found_files = find_requirements_files(
@@ -1468,6 +1490,7 @@ def _install_all_command(
         overwrite_pins=overwrite_pins,
         skip_dependencies=skip_dependencies,
         no_uv=no_uv,
+        allow_env_commands=allow_env_commands,
         verbose=verbose,
     )
 
@@ -1964,6 +1987,7 @@ def _main() -> None:  # noqa: PLR0912
             skip_dependencies=args.skip_dependency,
             overwrite_pins=args.overwrite_pin,
             no_uv=args.no_uv,
+            allow_env_commands=args.allow_env_commands,
             verbose=args.verbose,
         )
     elif args.command == "install-all":
@@ -1986,6 +2010,7 @@ def _main() -> None:  # noqa: PLR0912
             skip_dependencies=args.skip_dependency,
             overwrite_pins=args.overwrite_pin,
             no_uv=args.no_uv,
+            allow_env_commands=args.allow_env_commands,
             verbose=args.verbose,
         )
     elif args.command == "conda-lock":  # pragma: no cover
@@ -2053,6 +2078,10 @@ def main() -> None:
     """Run the command-line tool with user-facing error reporting."""
     try:
         _main()
-    except MissingPipIndexEnvironmentVariablesError as error:
+    except (
+        MissingPipIndexEnvironmentVariablesError,
+        EnvVarCommandError,
+        EnvVarCommandPermissionError,
+    ) as error:
         print(f"❌ {error}", file=sys.stderr)
         sys.exit(1)

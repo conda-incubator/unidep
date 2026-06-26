@@ -452,6 +452,41 @@ dependencies:
 > [!TIP]
 > Store sensitive credentials in environment variables rather than hardcoding them in configuration files. UniDep validates `${VAR_NAME}` patterns and expands them only when invoking installers.
 
+#### Resolving Environment Variables from Commands
+
+If a private index token can be produced by a command, configure `env_vars` and
+run install commands with `--allow-env-commands`:
+
+```yaml
+# requirements.yaml
+env_vars:
+  PRIVATE_REPO_TOKEN:
+    command:
+      - gcloud
+      - auth
+      - print-access-token
+    refresh: always
+
+pip_indices:
+  - https://token:${PRIVATE_REPO_TOKEN}@private.example.com/simple/
+```
+
+```toml
+# pyproject.toml
+[tool.unidep]
+pip_indices = ["https://token:${PRIVATE_REPO_TOKEN}@private.example.com/simple/"]
+
+[tool.unidep.env_vars.PRIVATE_REPO_TOKEN]
+command = ["gcloud", "auth", "print-access-token"]
+refresh = "always"
+```
+
+`command` must be a list of arguments, not a shell string. UniDep captures
+stdout, strips surrounding whitespace, and uses it as the environment variable
+value. `refresh` defaults to `missing`, which skips the command when the variable
+already exists. Use `refresh: always` for short-lived tokens. Commands never run
+unless `--allow-env-commands` is passed.
+
 ### `[project.dependencies]` in `pyproject.toml` handling
 
 The `project_dependency_handling` option in `[tool.unidep]` (in `pyproject.toml`) controls how dependencies listed in the standard `[project.dependencies]` section of `pyproject.toml` are handled when processed by `unidep`.

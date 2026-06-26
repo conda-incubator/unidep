@@ -19,6 +19,7 @@ from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
 from unidep._conflicts import extract_version_operator
+from unidep._env_vars import EnvVarCommand, collect_env_vars
 from unidep._version import __version__
 from unidep.platform_definitions import Platform, Spec, platforms_from_selector
 from unidep.utils import (
@@ -164,6 +165,7 @@ class ParsedRequirements(NamedTuple):
     dependency_entries: list[DependencyEntry]
     optional_dependency_entries: dict[str, list[DependencyEntry]]
     pip_indices: tuple[str, ...] = ()
+    env_vars: dict[str, EnvVarCommand] | None = None
 
 
 class Requirements(NamedTuple):
@@ -699,6 +701,7 @@ def parse_requirements(
     optional_dependency_entries: dict[str, list[DependencyEntry]] = defaultdict(list)
     channels: set[str] = set()
     pip_indices: list[str] = []  # Preserve order, first is primary
+    env_vars: dict[str, EnvVarCommand] = {}
     platforms: set[Platform] = set()
 
     identifier = -1
@@ -709,6 +712,11 @@ def parse_requirements(
         for index in _collect_pip_indices(data):
             if index and index not in pip_indices:
                 pip_indices.append(index)
+        for name, command in collect_env_vars(data).items():
+            if name in env_vars and env_vars[name] != command:
+                msg = f"Conflicting `env_vars` definitions for {name}."
+                raise ValueError(msg)
+            env_vars[name] = command
         platforms.update(data.get("platforms", []))
         if "dependencies" in data:
             identifier = _add_dependencies(
@@ -746,6 +754,7 @@ def parse_requirements(
         dependency_entries,
         defaultdict_to_dict(optional_dependency_entries),
         tuple(pip_indices),
+        dict(env_vars),
     )
 
 
