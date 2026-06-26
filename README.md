@@ -455,8 +455,7 @@ dependencies:
 
 #### Resolving Environment Variables from Commands
 
-If a private index token can be produced by a command, configure `env_vars` and
-run install commands with `--allow-env-commands`:
+If a private index token can be produced by a command, configure `env_vars`:
 
 ```yaml
 # requirements.yaml
@@ -486,7 +485,7 @@ refresh = "always"
 UniDep captures stdout, strips surrounding whitespace, and uses it as the environment variable value.
 `refresh` defaults to `missing`, which skips the command when the variable already exists.
 Use `refresh: always` for short-lived tokens.
-Commands never run unless `--allow-env-commands` is passed.
+Use `--no-env-commands` to skip configured commands and rely only on existing environment variables.
 
 ### `[project.dependencies]` in `pyproject.toml` handling
 
@@ -907,7 +906,7 @@ usage: unidep install [-h] [-v] [-e] [--skip-local] [--skip-pip]
                       [-n CONDA_ENV_NAME | -p CONDA_ENV_PREFIX] [--dry-run]
                       [--ignore-pin IGNORE_PIN]
                       [--overwrite-pin OVERWRITE_PIN] [-f CONDA_LOCK_FILE]
-                      [--no-uv] [--allow-env-commands]
+                      [--no-uv] [--no-env-commands]
                       files [files ...]
 
 Automatically install all dependencies from one or more `requirements.yaml` or
@@ -975,8 +974,8 @@ options:
                         env-name` or `--conda-env-prefix`.
   --no-uv               Disables the use of `uv` for pip install. By default,
                         `uv` is used if it is available in the PATH.
-  --allow-env-commands  Allow `env_vars` command entries to run while
-                        resolving installer environment variables.
+  --no-env-commands     Skip `env_vars` command entries while resolving
+                        installer environment variables.
 ```
 
 <!-- OUTPUT:END -->
@@ -1001,7 +1000,7 @@ usage: unidep install [-h] [-v] [-e] [--skip-local] [--skip-pip]
                       [-n CONDA_ENV_NAME | -p CONDA_ENV_PREFIX] [--dry-run]
                       [--ignore-pin IGNORE_PIN]
                       [--overwrite-pin OVERWRITE_PIN] [-f CONDA_LOCK_FILE]
-                      [--no-uv] [--allow-env-commands]
+                      [--no-uv] [--no-env-commands]
                       files [files ...]
 
 Automatically install all dependencies from one or more `requirements.yaml` or
@@ -1069,8 +1068,8 @@ options:
                         env-name` or `--conda-env-prefix`.
   --no-uv               Disables the use of `uv` for pip install. By default,
                         `uv` is used if it is available in the PATH.
-  --allow-env-commands  Allow `env_vars` command entries to run while
-                        resolving installer environment variables.
+  --no-env-commands     Skip `env_vars` command entries while resolving
+                        installer environment variables.
 ```
 
 <!-- OUTPUT:END -->

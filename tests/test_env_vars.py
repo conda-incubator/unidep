@@ -14,10 +14,10 @@ from unidep._dependencies_parsing import parse_requirements
 from unidep._env_vars import (
     EnvVarCommand,
     EnvVarCommandError,
-    EnvVarCommandPermissionError,
     collect_env_vars,
     resolve_env_var_commands,
 )
+from unidep._pip_indices import MissingPipIndexEnvironmentVariablesError
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -84,7 +84,6 @@ def test_install_resolves_missing_pip_index_env_var_from_command(
             no_dependencies=False,
             no_uv=True,
             verbose=False,
-            allow_env_commands=True,
         )
 
     out = capsys.readouterr().out
@@ -97,7 +96,7 @@ def test_install_resolves_missing_pip_index_env_var_from_command(
     )
 
 
-def test_install_requires_allow_env_commands_before_running_command(
+def test_install_no_env_commands_skips_command_and_reports_missing_var(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -107,7 +106,10 @@ def test_install_requires_allow_env_commands_before_running_command(
     with (
         patch("unidep._cli._maybe_conda_executable", return_value=None),
         patch("unidep._env_vars.subprocess.run") as env_run,
-        pytest.raises(EnvVarCommandPermissionError, match="--allow-env-commands"),
+        pytest.raises(
+            MissingPipIndexEnvironmentVariablesError,
+            match="PRIVATE_REPO_TOKEN",
+        ),
     ):
         _install_command(
             req_file,
@@ -123,6 +125,7 @@ def test_install_requires_allow_env_commands_before_running_command(
             no_dependencies=False,
             no_uv=True,
             verbose=False,
+            no_env_commands=True,
         )
 
     env_run.assert_not_called()
@@ -197,7 +200,6 @@ def test_install_refresh_always_replaces_existing_env_var(
             no_dependencies=False,
             no_uv=True,
             verbose=False,
-            allow_env_commands=True,
         )
 
     assert (
@@ -307,7 +309,7 @@ def test_resolve_env_var_command_reports_failed_command(
     ):
         resolve_env_var_commands(
             {"TOKEN": EnvVarCommand(command=("cmd",))},
-            allow_commands=True,
+            no_env_commands=False,
         )
 
 
@@ -325,11 +327,11 @@ def test_resolve_env_var_command_reports_empty_output(
     ):
         resolve_env_var_commands(
             {"TOKEN": EnvVarCommand(command=("cmd",))},
-            allow_commands=True,
+            no_env_commands=False,
         )
 
 
-def test_install_cli_reports_env_var_command_permission_error(
+def test_install_cli_no_env_commands_reports_missing_var(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     tmp_path: Path,
@@ -347,6 +349,7 @@ def test_install_cli_reports_env_var_command_permission_error(
             "--skip-local",
             "--conda-env-name",
             "test-env",
+            "--no-env-commands",
         ],
     )
 
@@ -355,5 +358,5 @@ def test_install_cli_reports_env_var_command_permission_error(
 
     captured = capsys.readouterr()
     assert excinfo.value.code == 1
-    assert "--allow-env-commands" in captured.err
+    assert "Unresolved environment variable(s) PRIVATE_REPO_TOKEN" in captured.err
     assert "Traceback" not in captured.err

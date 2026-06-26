@@ -18,10 +18,6 @@ class EnvVarCommandError(RuntimeError):
     """Raised when an env var command cannot produce a value."""
 
 
-class EnvVarCommandPermissionError(PermissionError):
-    """Raised when env var commands are configured but not allowed."""
-
-
 @dataclass(frozen=True)
 class EnvVarCommand:
     """Command that can provide an environment variable value."""
@@ -70,9 +66,11 @@ def collect_env_vars(data: Mapping[str, Any]) -> dict[str, EnvVarCommand]:
 def resolve_env_var_commands(
     env_vars: Mapping[str, EnvVarCommand],
     *,
-    allow_commands: bool,
+    no_env_commands: bool,
 ) -> dict[str, str]:
     """Run configured commands and return resolved environment variable values."""
+    if no_env_commands:
+        return {}
     to_resolve = {
         name: config
         for name, config in env_vars.items()
@@ -80,13 +78,6 @@ def resolve_env_var_commands(
     }
     if not to_resolve:
         return {}
-    if not allow_commands:
-        names = ", ".join(sorted(to_resolve))
-        msg = (
-            f"env_vars command(s) configured for {names}. Re-run with "
-            "`--allow-env-commands` to execute them."
-        )
-        raise EnvVarCommandPermissionError(msg)
     return {
         name: _run_env_var_command(name, config) for name, config in to_resolve.items()
     }
