@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import textwrap
 from pathlib import Path, PureWindowsPath
-from typing import TYPE_CHECKING, Tuple, cast
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
@@ -59,7 +59,7 @@ def test_origin_to_text_normalizes_windows_style_local_chain() -> None:
         dependency_index=3,
         optional_group="dev",
         local_dependency_chain=cast(
-            Tuple[Path, ...],
+            "tuple[Path, ...]",
             (
                 PureWindowsPath("libs\\a"),
                 PureWindowsPath("libs\\b"),

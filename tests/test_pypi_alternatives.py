@@ -27,11 +27,7 @@ else:  # pragma: no cover
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-    if sys.version_info >= (3, 8):
-        from typing import Literal
-    else:  # pragma: no cover
-        from typing_extensions import Literal
+    from typing import Literal
 
 
 def test_parse_local_dependency_item_string() -> None:

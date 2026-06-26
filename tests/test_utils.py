@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import importlib.metadata
-import sys
 from pathlib import Path
+from typing import get_args
 from unittest.mock import patch
 
 import pytest
@@ -23,11 +23,6 @@ from unidep.utils import (
     resolve_platforms,
     split_path_and_extras,
 )
-
-if sys.version_info >= (3, 8):
-    from typing import get_args
-else:  # pragma: no cover
-    from typing_extensions import get_args
 
 
 def test_escape_unicode() -> None:
@@ -75,67 +70,101 @@ def test_spec_rendering_helpers() -> None:
 
 
 def test_detect_platform() -> None:
-    with patch("platform.system", return_value="Linux"), patch(
-        "platform.machine",
-        return_value="x86_64",
+    with (
+        patch("platform.system", return_value="Linux"),
+        patch(
+            "platform.machine",
+            return_value="x86_64",
+        ),
     ):
         assert identify_current_platform() == "linux-64"
 
-    with patch("platform.system", return_value="Linux"), patch(
-        "platform.machine",
-        return_value="aarch64",
+    with (
+        patch("platform.system", return_value="Linux"),
+        patch(
+            "platform.machine",
+            return_value="aarch64",
+        ),
     ):
         assert identify_current_platform() == "linux-aarch64"
 
-    with patch("platform.system", return_value="Darwin"), patch(
-        "platform.machine",
-        return_value="x86_64",
+    with (
+        patch("platform.system", return_value="Darwin"),
+        patch(
+            "platform.machine",
+            return_value="x86_64",
+        ),
     ):
         assert identify_current_platform() == "osx-64"
 
-    with patch("platform.system", return_value="Darwin"), patch(
-        "platform.machine",
-        return_value="arm64",
+    with (
+        patch("platform.system", return_value="Darwin"),
+        patch(
+            "platform.machine",
+            return_value="arm64",
+        ),
     ):
         assert identify_current_platform() == "osx-arm64"
 
-    with patch("platform.system", return_value="Windows"), patch(
-        "platform.machine",
-        return_value="AMD64",
+    with (
+        patch("platform.system", return_value="Windows"),
+        patch(
+            "platform.machine",
+            return_value="AMD64",
+        ),
     ):
         assert identify_current_platform() == "win-64"
 
-    with patch("platform.system", return_value="Linux"), patch(
-        "platform.machine",
-        return_value="unknown",
-    ), pytest.raises(UnsupportedPlatformError, match="Unsupported Linux architecture"):
-        identify_current_platform()
-
-    with patch("platform.system", return_value="Darwin"), patch(
-        "platform.machine",
-        return_value="unknown",
-    ), pytest.raises(UnsupportedPlatformError, match="Unsupported macOS architecture"):
-        identify_current_platform()
-
-    with patch("platform.system", return_value="Windows"), patch(
-        "platform.machine",
-        return_value="unknown",
-    ), pytest.raises(
-        UnsupportedPlatformError,
-        match="Unsupported Windows architecture",
+    with (
+        patch("platform.system", return_value="Linux"),
+        patch(
+            "platform.machine",
+            return_value="unknown",
+        ),
+        pytest.raises(UnsupportedPlatformError, match="Unsupported Linux architecture"),
     ):
         identify_current_platform()
 
-    with patch("platform.system", return_value="Linux"), patch(
-        "platform.machine",
-        return_value="ppc64le",
+    with (
+        patch("platform.system", return_value="Darwin"),
+        patch(
+            "platform.machine",
+            return_value="unknown",
+        ),
+        pytest.raises(UnsupportedPlatformError, match="Unsupported macOS architecture"),
+    ):
+        identify_current_platform()
+
+    with (
+        patch("platform.system", return_value="Windows"),
+        patch(
+            "platform.machine",
+            return_value="unknown",
+        ),
+        pytest.raises(
+            UnsupportedPlatformError,
+            match="Unsupported Windows architecture",
+        ),
+    ):
+        identify_current_platform()
+
+    with (
+        patch("platform.system", return_value="Linux"),
+        patch(
+            "platform.machine",
+            return_value="ppc64le",
+        ),
     ):
         assert identify_current_platform() == "linux-ppc64le"
 
-    with patch("platform.system", return_value="Unknown"), patch(
-        "platform.machine",
-        return_value="x86_64",
-    ), pytest.raises(UnsupportedPlatformError, match="Unsupported operating system"):
+    with (
+        patch("platform.system", return_value="Unknown"),
+        patch(
+            "platform.machine",
+            return_value="x86_64",
+        ),
+        pytest.raises(UnsupportedPlatformError, match="Unsupported operating system"),
+    ):
         identify_current_platform()
 
 

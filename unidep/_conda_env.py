@@ -28,10 +28,7 @@ from unidep.platform_definitions import (
     Platform,
     Spec,
 )
-from unidep.utils import (
-    add_comment_to_file,
-    build_pep508_environment_marker,
-)
+from unidep.utils import add_comment_to_file, build_pep508_environment_marker
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -39,10 +36,7 @@ if TYPE_CHECKING:
 
     from unidep._dependencies_parsing import DependencyEntry
 
-if sys.version_info >= (3, 8):
-    from typing import Literal, get_args
-else:  # pragma: no cover
-    from typing_extensions import Literal, get_args
+from typing import Literal, get_args
 
 
 class CondaEnvironmentSpec(NamedTuple):

@@ -36,10 +36,7 @@ from unidep.utils import (
 )
 
 if TYPE_CHECKING:
-    if sys.version_info >= (3, 8):
-        from typing import Literal
-    else:  # pragma: no cover
-        from typing_extensions import Literal
+    from typing import Literal
 
 
 if sys.version_info >= (3, 11):

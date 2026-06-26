@@ -11,9 +11,7 @@ from hatchling.metadata.plugin.interface import MetadataHookInterface
 from hatchling.plugin import hookimpl
 
 from unidep._setuptools_integration import _deps
-from unidep.utils import (
-    parse_folder_or_filename,
-)
+from unidep.utils import parse_folder_or_filename
 
 __all__ = ["UnidepRequirementsMetadataHook"]
 

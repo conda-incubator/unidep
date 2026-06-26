@@ -31,14 +31,9 @@ from unidep.utils import is_pip_installable
 from .helpers import maybe_as_toml
 
 if TYPE_CHECKING:
-    import sys
+    from typing import Literal
 
     from unidep.platform_definitions import CondaPip
-
-    if sys.version_info >= (3, 8):
-        from typing import Literal
-    else:  # pragma: no cover
-        from typing_extensions import Literal
 
 
 REPO_ROOT = Path(__file__).parent.parent

@@ -23,19 +23,12 @@ from unidep._dependency_selection import (
     collapse_selected_universals,
     select_conda_like_requirements,
 )
-from unidep.utils import (
-    add_comment_to_file,
-    remove_top_comments,
-    warn,
-)
+from unidep.utils import add_comment_to_file, remove_top_comments, warn
 
 if TYPE_CHECKING:
-    from unidep.platform_definitions import CondaPip, Platform
+    from typing import Literal
 
-    if sys.version_info >= (3, 8):
-        from typing import Literal
-    else:  # pragma: no cover
-        from typing_extensions import Literal
+    from unidep.platform_definitions import CondaPip, Platform
 
 
 def _run_conda_lock(
@@ -429,7 +422,7 @@ def _conda_lock_subpackage(
     yaml.representer.ignore_aliases = lambda *_: True  # Disable anchors
     conda_lock_output = file.parent / "conda-lock.yml"
     metadata = {
-        "content_hash": {p: "unidep-is-awesome" for p in platforms},
+        "content_hash": dict.fromkeys(platforms, "unidep-is-awesome"),
         "channels": [{"url": c, "used_env_vars": []} for c in channels],
         "platforms": platforms,
         "sources": [str(file)],

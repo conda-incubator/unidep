@@ -5,14 +5,7 @@ Types and definitions for platforms, selectors, and markers.
 
 from __future__ import annotations
 
-import sys
-from typing import NamedTuple, cast
-
-if sys.version_info >= (3, 8):
-    from typing import Literal, get_args
-else:  # pragma: no cover
-    from typing_extensions import Literal, get_args
-
+from typing import Literal, NamedTuple, cast, get_args
 
 CondaPlatform = Literal["unix", "linux", "osx", "win"]
 Platform = Literal[

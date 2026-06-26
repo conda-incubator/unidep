@@ -7,10 +7,7 @@ from typing import TYPE_CHECKING, Literal
 
 import pytest
 
-from unidep._dependencies_parsing import (
-    _add_project_dependencies,
-    parse_requirements,
-)
+from unidep._dependencies_parsing import _add_project_dependencies, parse_requirements
 from unidep.platform_definitions import Spec
 
 if TYPE_CHECKING:

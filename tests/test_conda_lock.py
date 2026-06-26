@@ -155,9 +155,12 @@ dependencies:
   - cuda-toolkit  # [linux64]
 """,
     )
-    with patch("unidep._conda_lock._run_conda_lock", return_value=None), patch(
-        "unidep.utils.identify_current_platform",
-        return_value="osx-arm64",
+    with (
+        patch("unidep._conda_lock._run_conda_lock", return_value=None),
+        patch(
+            "unidep.utils.identify_current_platform",
+            return_value="osx-arm64",
+        ),
     ):
         conda_lock_command(
             depth=1,
@@ -332,9 +335,12 @@ def test_conda_lock_fails_before_lock_when_pip_index_env_var_is_unset(
 """,
     )
 
-    with patch("unidep._conda_lock._run_conda_lock") as run_conda_lock, pytest.raises(
-        ValueError,
-        match=r"PRIVATE_REPO_TOKEN.*pip_indices",
+    with (
+        patch("unidep._conda_lock._run_conda_lock") as run_conda_lock,
+        pytest.raises(
+            ValueError,
+            match=r"PRIVATE_REPO_TOKEN.*pip_indices",
+        ),
     ):
         conda_lock_command(
             depth=1,
@@ -648,13 +654,16 @@ def test_conda_lock_subpackages_skips_root_requirements(
             fp,
         )
 
-    with patch(
-        "unidep._conda_lock.find_requirements_files",
-        return_value=[root_req, sub_req],
-    ), patch(
-        "unidep._conda_lock._conda_lock_subpackage",
-        return_value=subdir / "conda-lock.yml",
-    ) as mock:
+    with (
+        patch(
+            "unidep._conda_lock.find_requirements_files",
+            return_value=[root_req, sub_req],
+        ),
+        patch(
+            "unidep._conda_lock._conda_lock_subpackage",
+            return_value=subdir / "conda-lock.yml",
+        ) as mock,
+    ):
         lock_files = _conda_lock_subpackages(tmp_path, 1, conda_lock_file)
 
     mock.assert_called_once()

@@ -48,9 +48,7 @@ def test_ci_matrices_start_at_python_39() -> None:
         == SUPPORTED_PYTHON_VERSIONS
     )
     assert (
-        install_workflow["jobs"]["pip-install"]["strategy"]["matrix"][
-            "python-version"
-        ]
+        install_workflow["jobs"]["pip-install"]["strategy"]["matrix"]["python-version"]
         == SUPPORTED_PYTHON_VERSIONS
     )
     assert (
@@ -59,9 +57,6 @@ def test_ci_matrices_start_at_python_39() -> None:
         ]
         == SUPPORTED_PYTHON_VERSIONS
     )
-    assert (
-        install_workflow["jobs"]["miniconda-install"]["strategy"]["matrix"][
-            "python-version"
-        ]
-        == ["3.9", "3.12"]
-    )
+    assert install_workflow["jobs"]["miniconda-install"]["strategy"]["matrix"][
+        "python-version"
+    ] == ["3.9", "3.12"]

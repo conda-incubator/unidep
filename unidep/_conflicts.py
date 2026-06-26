@@ -5,20 +5,13 @@ Verion conflict detections and resolution.
 
 from __future__ import annotations
 
-import sys
 from collections import defaultdict
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, get_args
 
 from packaging import version
 
 from unidep.platform_definitions import Platform, Spec
 from unidep.utils import defaultdict_to_dict
-
-if sys.version_info >= (3, 8):
-    from typing import get_args
-else:  # pragma: no cover
-    from typing_extensions import get_args
-
 
 if TYPE_CHECKING:
     from unidep.platform_definitions import CondaPip
