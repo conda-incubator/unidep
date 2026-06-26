@@ -11,22 +11,13 @@ from typing import TYPE_CHECKING
 import pytest
 from ruamel.yaml import YAML
 
-from unidep import (
-    find_requirements_files,
-    parse_local_dependencies,
-    parse_requirements,
-)
+from unidep import find_requirements_files, parse_local_dependencies, parse_requirements
 from unidep._conflicts import resolve_conflicts
 
 from .helpers import maybe_as_toml
 
 if TYPE_CHECKING:
-    import sys
-
-    if sys.version_info >= (3, 8):
-        from typing import Literal
-    else:  # pragma: no cover
-        from typing_extensions import Literal
+    from typing import Literal
 
 
 REPO_ROOT = Path(__file__).parent.parent

@@ -7,16 +7,9 @@ import os
 import re
 import sys
 from collections import Counter, deque
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Literal,
-    NamedTuple,
-    Sequence,
-    cast,
-)
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple, cast
 
 from ruamel.yaml import YAML
 
@@ -43,7 +36,7 @@ from unidep.utils import (
 )
 
 if TYPE_CHECKING:
-    from typing import Dict, Optional, Tuple, Union
+    from typing import Optional, Union
 
     from unidep._dependencies_parsing import ParsedRequirements
     from unidep.platform_definitions import Spec
@@ -56,13 +49,13 @@ if TYPE_CHECKING:
     from unidep.platform_definitions import Platform
 
     # Version spec can be a string or dict with version/build/extras
-    VersionSpec: TypeAlias = Union[str, Dict[str, Any]]
+    VersionSpec: TypeAlias = Union[str, dict[str, Any]]
 
     # Type alias for the extracted dependencies structure
     # Maps platform (or None for universal) to (conda_deps, pip_deps)
-    PlatformDeps: TypeAlias = Dict[
+    PlatformDeps: TypeAlias = dict[
         Optional[str],
-        Tuple[Dict[str, VersionSpec], Dict[str, VersionSpec]],
+        tuple[dict[str, VersionSpec], dict[str, VersionSpec]],
     ]
 
 

@@ -9,10 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from unidep._cli import _install_command, _pip_install_local
-from unidep._pip_indices import (
-    format_command_for_display,
-    redact_command_for_exception,
-)
+from unidep._pip_indices import format_command_for_display, redact_command_for_exception
 
 if TYPE_CHECKING:
     from pathlib import Path

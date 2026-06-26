@@ -127,10 +127,13 @@ def test_package_name_from_path_does_not_suppress_unexpected_errors(
     setup_py = tmp_path / "setup.py"
     setup_py.write_text("from setuptools import setup\nsetup(name='pkg')")
 
-    with patch(
-        "unidep.utils.package_name_from_setup_py",
-        side_effect=RuntimeError("boom"),
-    ), pytest.raises(RuntimeError, match="boom"):
+    with (
+        patch(
+            "unidep.utils.package_name_from_setup_py",
+            side_effect=RuntimeError("boom"),
+        ),
+        pytest.raises(RuntimeError, match="boom"),
+    ):
         package_name_from_path(tmp_path)
 
 

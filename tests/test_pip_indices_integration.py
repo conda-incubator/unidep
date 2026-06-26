@@ -124,9 +124,12 @@ class TestUnidepInstallIntegration:
     def test_install_with_uv_backend(self, mock_project: Path) -> None:  # noqa: ARG002
         """Test that pip_indices work with uv backend."""
         # uv uses the same --index-url and --extra-index-url flags
-        with patch("shutil.which", return_value="/path/to/uv"), patch(
-            "subprocess.run",
-        ) as mock_run:
+        with (
+            patch("shutil.which", return_value="/path/to/uv"),
+            patch(
+                "subprocess.run",
+            ) as mock_run,
+        ):
             mock_run.return_value = MagicMock(returncode=0)
 
             # Expected uv command structure

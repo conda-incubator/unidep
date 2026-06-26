@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional, Tuple, cast
+from typing import TYPE_CHECKING, Optional, cast
 
 from packaging.specifiers import InvalidSpecifier, Specifier
 from packaging.utils import canonicalize_name
@@ -15,12 +15,7 @@ from unidep._conflicts import (
     combine_version_pinnings,
     extract_version_operator,
 )
-from unidep.platform_definitions import (
-    PLATFORM_SELECTOR_MAP,
-    CondaPip,
-    Platform,
-    Spec,
-)
+from unidep.platform_definitions import PLATFORM_SELECTOR_MAP, CondaPip, Platform, Spec
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -28,7 +23,7 @@ if TYPE_CHECKING:
     from unidep._dependencies_parsing import DependencyEntry, DependencyOrigin
 
 TargetPlatform = Optional[Platform]
-FamilyKey = Tuple[Optional[str], Optional[str]]
+FamilyKey = tuple[Optional[str], Optional[str]]
 
 
 @dataclass(frozen=True)

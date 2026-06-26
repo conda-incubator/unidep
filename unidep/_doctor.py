@@ -11,7 +11,7 @@ import subprocess
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Mapping
+from typing import TYPE_CHECKING, Any
 
 from ruamel.yaml import YAML
 
@@ -21,6 +21,9 @@ from unidep._dependencies_parsing import (
     get_local_dependencies,
 )
 from unidep.utils import split_path_and_extras
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 CONDA_DISTRIBUTIONS = {
     "anaconda": ("anaconda3", "anaconda"),

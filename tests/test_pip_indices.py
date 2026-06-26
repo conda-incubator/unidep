@@ -10,10 +10,7 @@ import pytest
 import yaml
 
 from unidep._conda_env import CondaEnvironmentSpec, write_conda_environment_file
-from unidep._dependencies_parsing import (
-    _collect_pip_indices,
-    parse_requirements,
-)
+from unidep._dependencies_parsing import _collect_pip_indices, parse_requirements
 
 
 class TestPipIndicesParsing:

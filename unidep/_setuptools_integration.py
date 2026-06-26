@@ -34,16 +34,11 @@ from unidep.utils import (
 )
 
 if TYPE_CHECKING:
-    import sys
+    from typing import Literal
 
     from setuptools import Distribution
 
     from unidep.platform_definitions import Platform, Spec
-
-    if sys.version_info >= (3, 8):
-        from typing import Literal
-    else:
-        from typing_extensions import Literal
 
 
 def filter_python_dependencies(
