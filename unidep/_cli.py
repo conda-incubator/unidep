@@ -13,8 +13,6 @@ import itertools
 import json
 import os
 import platform
-import re
-import shlex
 import shutil
 import subprocess
 import sys
@@ -23,8 +21,6 @@ from importlib import resources as importlib_resources
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, NamedTuple, cast, get_args
 
-from packaging.requirements import InvalidRequirement, Requirement
-from packaging.utils import canonicalize_name
 from ruamel.yaml import YAML
 
 from unidep._cli_output import print_command, print_phase, rich_class
@@ -33,7 +29,11 @@ from unidep._conda_env import (
     create_conda_env_specification,
     write_conda_environment_file,
 )
-from unidep._conda_lock import conda_lock_command
+from unidep._conda_lock import (
+    _filter_env_spec_to_lock_skipped_pip_dependencies,
+    _parse_lock_skipped_dependencies,
+    conda_lock_command,
+)
 from unidep._dependencies_parsing import (
     DependencyEntry,
     _load,
@@ -1130,118 +1130,6 @@ def _run_with_redacted_command(command: Sequence[str | Path]) -> None:
         exc.cmd = redact_command_for_exception(exc.cmd)
         raise
 
-
-def _strip_pip_extras(name: str) -> str:
-    if not name.endswith("]") or "[" not in name:
-        return name
-    return name.split("[", 1)[0]
-
-
-def _canonical_dependency_name(name: str) -> str:
-    return canonicalize_name(_strip_pip_extras(name))
-
-
-def _pip_requirement_name(requirement: str) -> str:
-    try:
-        return _canonical_dependency_name(Requirement(requirement).name)
-    except InvalidRequirement:
-        dependency = requirement.split(";", 1)[0].strip()
-        return _canonical_dependency_name(parse_package_str(dependency).name)
-
-
-def _conda_dependency_name(dependency: str | dict[str, str]) -> str:
-    dependency_str = (
-        next(iter(dependency.values())) if isinstance(dependency, dict) else dependency
-    )
-    return _canonical_dependency_name(parse_package_str(dependency_str).name)
-
-
-def _parse_lock_header_skipped_dependencies(conda_lock_file: Path) -> list[str]:
-    if not conda_lock_file.exists():
-        return []
-    for line in conda_lock_file.read_text().splitlines():
-        if "File generated with:" not in line:
-            continue
-        match = re.search(r"`unidep (?P<args>.*)`", line)
-        if match is None:
-            continue
-        try:
-            tokens = shlex.split(match.group("args"))
-        except ValueError:
-            continue
-        skipped: list[str] = []
-        i = 0
-        while i < len(tokens):
-            argument = tokens[i]
-            if argument == "--skip-dependency" and i + 1 < len(tokens):
-                skipped.append(tokens[i + 1])
-                i += 2
-                continue
-            if argument.startswith("--skip-dependency="):
-                skipped.append(argument.split("=", 1)[1])
-            i += 1
-        return skipped
-    return []
-
-
-def _parse_lock_metadata_skipped_dependencies(conda_lock_file: Path) -> list[str]:
-    if not conda_lock_file.exists():
-        return []
-    yaml = YAML(typ="safe")
-    with conda_lock_file.open() as fp:
-        data = yaml.load(fp)
-    if not isinstance(data, dict):
-        return []
-    metadata = data.get("metadata", {})
-    if not isinstance(metadata, dict):
-        return []
-    unidep_metadata = metadata.get("unidep", {})
-    if not isinstance(unidep_metadata, dict):
-        return []
-    skipped = unidep_metadata.get("skipped_dependencies", [])
-    if not isinstance(skipped, list):
-        return []
-    return [str(dependency) for dependency in skipped]
-
-
-def _parse_lock_skipped_dependencies(conda_lock_file: Path) -> list[str]:
-    skipped = _parse_lock_metadata_skipped_dependencies(conda_lock_file)
-    if skipped:
-        return skipped
-    return _parse_lock_header_skipped_dependencies(conda_lock_file)
-
-
-def _filter_env_spec_to_lock_skipped_pip_dependencies(
-    env_spec: CondaEnvironmentSpec,
-    skipped_dependencies: list[str],
-) -> CondaEnvironmentSpec:
-    skipped_names = {
-        _canonical_dependency_name(dependency) for dependency in skipped_dependencies
-    }
-    pip_dependencies = [
-        dependency
-        for dependency in env_spec.pip
-        if _pip_requirement_name(dependency) in skipped_names
-    ]
-    conda_dependencies = [
-        dependency
-        for dependency in env_spec.conda
-        if _conda_dependency_name(dependency) in skipped_names
-    ]
-    if conda_dependencies:
-        dependencies = ", ".join(
-            sorted(str(dependency) for dependency in conda_dependencies),
-        )
-        print(
-            "❌ `conda-lock.yml` was generated with skipped dependencies that"
-            f" resolve to conda packages on this platform: {dependencies}."
-            " `install-all -f` can only repair skipped pip dependencies after"
-            " creating the locked environment. Regenerate the lock without"
-            " skipping those conda dependencies, or run the metadata install"
-            " path without `-f`.",
-        )
-        sys.exit(1)
-    return env_spec._replace(conda=[], pip=pip_dependencies)
 
 
 def _pip_install_local_arguments(

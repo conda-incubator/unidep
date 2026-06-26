@@ -27,17 +27,14 @@ except ImportError:  # pragma: no cover
 import unidep._cli as cli
 from unidep._cli import (
     CondaExecutable,
-    _canonical_dependency_name,
     _capitalize_dir,
     _check_conda_prefix,
     _collect_available_optional_dependency_groups,
     _collect_selected_conda_like_platforms,
     _conda_dependencies_with_required_pip,
-    _conda_dependency_name,
     _conda_env_list,
     _conda_info,
     _conda_root_prefix,
-    _filter_env_spec_to_lock_skipped_pip_dependencies,
     _find_windows_path,
     _flatten_selected_dependency_entries,
     _get_conda_executable,
@@ -48,16 +45,21 @@ from unidep._cli import (
     _maybe_create_conda_env_args,
     _merge_command,
     _merge_optional_dependency_extras,
-    _parse_lock_skipped_dependencies,
     _pip_compile_command,
     _pip_install_local_arguments,
-    _pip_requirement_name,
     _pip_subcommand,
     _print_versions,
     _print_with_rich,
     main,
 )
 from unidep._conda_env import CondaEnvironmentSpec
+from unidep._conda_lock import (
+    _canonical_dependency_name,
+    _conda_dependency_name,
+    _filter_env_spec_to_lock_skipped_pip_dependencies,
+    _parse_lock_skipped_dependencies,
+    _pip_requirement_name,
+)
 from unidep._dependencies_parsing import parse_requirements
 from unidep._setuptools_integration import _deps
 
