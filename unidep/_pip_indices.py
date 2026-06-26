@@ -56,8 +56,6 @@ def normalize_pip_indices(
     if pip_indices is None:
         return ()
     if not validate_env_vars:
-        if isinstance(pip_indices, str):
-            return (pip_indices,)
         return tuple(pip_indices)
     if isinstance(pip_indices, str):
         return _validate_pip_indices_env_vars((pip_indices,))
