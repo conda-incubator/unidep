@@ -57,6 +57,7 @@ Try it now and streamline your development process!
     - [How It Works](#how-it-works-1)
     - [Example Usage](#example-usage)
     - [Generated Output](#generated-output)
+    - [Resolving Environment Variables from Commands](#resolving-environment-variables-from-commands)
   - [`[project.dependencies]` in `pyproject.toml` handling](#projectdependencies-in-pyprojecttoml-handling)
 - [:jigsaw: Build System Integration](#jigsaw-build-system-integration)
   - [Local Dependencies in Monorepos](#local-dependencies-in-monorepos)
