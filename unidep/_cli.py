@@ -233,6 +233,17 @@ def _add_common_args(  # noqa: PLR0912, C901
             " to overwrite the pins of multiple packages.",
         )
 
+        if "extra" in options:
+            sub_parser.add_argument(
+                "--extra",
+                action="append",
+                default=[],
+                help=(
+                    "Include optional dependency group(s). "
+                    "Can be specified multiple times."
+                ),
+            )
+
 
 def _add_extra_flags(
     subparser: argparse.ArgumentParser,
@@ -315,6 +326,7 @@ def _parse_args() -> argparse.Namespace:
             "ignore-pin",
             "skip-dependency",
             "overwrite-pin",
+            "extra",
         },
     )
 
@@ -360,6 +372,7 @@ def _parse_args() -> argparse.Namespace:
             "skip-dependency",
             "overwrite-pin",
             "verbose",
+            "extra",
         },
     )
     install_all_help = (
@@ -402,6 +415,7 @@ def _parse_args() -> argparse.Namespace:
             "skip-dependency",
             "overwrite-pin",
             "verbose",
+            "extra",
         },
     )
 
@@ -460,6 +474,7 @@ def _parse_args() -> argparse.Namespace:
             "ignore-pin",
             "skip-dependency",
             "overwrite-pin",
+            "extra",
         },
     )
     _add_extra_flags(parser_lock, "conda-lock lock", "conda-lock", "--micromamba")
@@ -504,6 +519,7 @@ def _parse_args() -> argparse.Namespace:
             "ignore-pin",
             "skip-dependency",
             "overwrite-pin",
+            "extra",
         },
     )
     _add_extra_flags(
@@ -546,6 +562,7 @@ def _parse_args() -> argparse.Namespace:
                 "ignore-pin",
                 "skip-dependency",
                 "overwrite-pin",
+                "extra",
             },
         )
         sub_parser.add_argument(
@@ -744,6 +761,7 @@ def _install_command(  # noqa: PLR0912
     ignore_pins: list[str] | None = None,
     overwrite_pins: list[str] | None = None,
     skip_dependencies: list[str] | None = None,
+    extras: list[list[str]] | Literal["*"] | None = None,
     verbose: bool = False,
 ) -> None:
     """Install the dependencies of a single `requirements.yaml` or `pyproject.toml` file."""  # noqa: E501
@@ -756,6 +774,7 @@ def _install_command(  # noqa: PLR0912
         ignore_pins=ignore_pins,
         overwrite_pins=overwrite_pins,
         skip_dependencies=skip_dependencies,
+        extras=extras,
         verbose=verbose,
     )
     platforms = [identify_current_platform()]
@@ -906,6 +925,7 @@ def _merge_command(
     skip_dependencies: list[str],
     overwrite_pins: list[str],
     verbose: bool,
+    extras: list[list[str]] | Literal["*"] | None = None,
 ) -> None:  # pragma: no cover
     # When using stdout, suppress verbose output
     verbose = verbose and not stdout
@@ -927,6 +947,7 @@ def _merge_command(
         ignore_pins=ignore_pins,
         overwrite_pins=overwrite_pins,
         skip_dependencies=skip_dependencies,
+        extras=extras,
         verbose=verbose,
     )
     if not platforms:
@@ -961,6 +982,7 @@ def _pip_compile_command(
     verbose: bool,
     extra_flags: list[str],
     output_file: Path | None = None,
+    extras: list[list[str]] | Literal["*"] | None = None,
 ) -> None:
     if importlib.util.find_spec("piptools") is None:  # pragma: no cover
         print(
@@ -980,6 +1002,7 @@ def _pip_compile_command(
         ignore_pins=ignore_pins,
         overwrite_pins=overwrite_pins,
         skip_dependencies=skip_dependencies,
+        extras=extras,
         verbose=verbose,
     )
     resolved = resolve_conflicts(
@@ -1101,6 +1124,7 @@ def main() -> None:
             ignore_pins=args.ignore_pin,
             skip_dependencies=args.skip_dependency,
             overwrite_pins=args.overwrite_pin,
+            extras=args.extra,
             verbose=args.verbose,
         )
     elif args.command == "pip":  # pragma: no cover
@@ -1124,6 +1148,7 @@ def main() -> None:
             ignore_pins=args.ignore_pin,
             skip_dependencies=args.skip_dependency,
             overwrite_pins=args.overwrite_pin,
+            extras=args.extra,
             verbose=args.verbose,
         )
         resolved = resolve_conflicts(
@@ -1153,6 +1178,7 @@ def main() -> None:
             ignore_pins=args.ignore_pin,
             skip_dependencies=args.skip_dependency,
             overwrite_pins=args.overwrite_pin,
+            extras=args.extra,
             verbose=args.verbose,
         )
     elif args.command == "install-all":
@@ -1205,6 +1231,7 @@ def main() -> None:
             ignore_pins=args.ignore_pin,
             skip_dependencies=args.skip_dependency,
             overwrite_pins=args.overwrite_pin,
+            extras=args.extra,
             extra_flags=args.extra_flags,
             output_file=args.output_file,
         )

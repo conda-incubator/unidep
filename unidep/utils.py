@@ -150,10 +150,50 @@ class ParsedPackageStr(NamedTuple):
     selector: str | None = None
 
 
+def split_path_and_extras(s: str) -> tuple[Path, list[str]]:
+    """Split a path from trailing extras.
+
+    Returns a tuple containing the path and a list of extras.
+    """
+    if not s.endswith("]"):
+        return Path(s), []
+
+    start = s.rfind("[")
+
+    if start == -1:
+        return Path(s), []
+
+    extras_str = s[start + 1 : -1]
+    extras = [extra.strip() for extra in extras_str.split(",") if extra.strip()]
+
+    path = Path(s[:start])
+
+    return path, extras
+
+
+
+class PathWithExtras(NamedTuple):
+    """A path together with optional dependency groups."""
+
+    path: Path
+    extras: list[str]
+
+    @property
+    def path_with_extras(self) -> Path:
+        """Return the path with extras appended."""
+        if not self.extras:
+            return self.path
+
+        extras = ",".join(self.extras)
+        return Path(f"{self.path}[{extras}]")
+
+    
+
+
 def parse_package_str(package_str: str) -> ParsedPackageStr:
     """Splits a string into package name, version pinning, and platform selector."""
     # Regex to match package name, version pinning, and optionally platform selector
-    name_pattern = r"[a-zA-Z0-9_.-]+"
+    name_pattern = r"[a-zA-Z0-9_.-]+(?:\[[^\]]+\])?"
     version_pin_pattern = r".*?"
     selector_pattern = r"[a-z0-9\s]+"
     pattern = rf"({name_pattern})\s*({version_pin_pattern})?(:({selector_pattern}))?$"

@@ -21,6 +21,7 @@ from unidep.utils import (
     is_pip_installable,
     parse_package_str,
     selector_from_comment,
+    split_path_and_extras,
     unidep_configured_in_toml,
     warn,
 )
@@ -138,7 +139,7 @@ class ParsedRequirements(NamedTuple):
     channels: list[str]
     platforms: list[Platform]
     requirements: dict[str, list[Spec]]
-
+    optional_dependencies: dict[str, dict[str, list[Spec]]]
 
 class Requirements(NamedTuple):
     """Requirements as CommentedSeq."""
@@ -191,56 +192,107 @@ def _get_local_dependencies(data: dict[str, Any]) -> list[str]:
     return []
 
 
-def parse_requirements(  # noqa: PLR0912
+def parse_requirements(
     *paths: Path,
     ignore_pins: list[str] | None = None,
     overwrite_pins: list[str] | None = None,
     skip_dependencies: list[str] | None = None,
+    extras: list[list[str]] | Literal["*"] | None = None,
     verbose: bool = False,
 ) -> ParsedRequirements:
     """Parse a list of `requirements.yaml` or `pyproject.toml` files."""
     ignore_pins = ignore_pins or []
     skip_dependencies = skip_dependencies or []
+
+    if extras is not None and extras != "*" and len(extras) != len(paths):
+        msg = (
+            f"Length of `extras` ({len(extras)}) "
+            f"must match number of paths ({len(paths)})."
+        )
+        raise ValueError(msg)
+
     overwrite_pins_map = _parse_overwrite_pins(overwrite_pins or [])
+
+    selected_extras: list[list[str]] = []
+
     requirements: dict[str, list[Spec]] = defaultdict(list)
+
+    optional_dependencies: dict[str, dict[str, list[Spec]]] = defaultdict(
+        lambda: defaultdict(list)
+    )
+
     channels: set[str] = set()
     platforms: set[Platform] = set()
-    datas = []
+
+    datas: list[dict[str, Any]] = []
     seen: set[Path] = set()
+
     yaml = YAML(typ="rt")
-    for p in paths:
+
+    for index, p in enumerate(paths):
+        path, path_extras = split_path_and_extras(str(p))
+
+        if extras is not None and extras != "*" and path_extras:
+            msg = (
+                "Cannot specify `extras` list when extras are already "
+                "given in the path."
+            )
+            raise ValueError(msg)
+
+        if extras == "*":
+            current_extras = []
+        elif extras is None:
+            current_extras = path_extras
+        else:
+            current_extras = extras[index]
+
+        selected_extras.append(current_extras)
+
         if verbose:
-            print(f"📄 Parsing `{p}`")
-        data = _load(p, yaml)
+            print(f"📄 Parsing `{path}`")
+
+        data = _load(path, yaml)
         datas.append(data)
-        seen.add(p.resolve())
+        seen.add(path.resolve())
 
         # Handle "local_dependencies" (or old name "includes", changed in 0.42.0)
         for include in _get_local_dependencies(data):
             try:
-                requirements_path = dependencies_filename(p.parent / include).resolve()
+                requirements_path = dependencies_filename(
+                    path.parent / include
+                ).resolve()
             except FileNotFoundError:
                 # Means that this is a local package that is not managed by unidep.
-                # We do not need to do anything here, just in `unidep install`.
                 continue
+
             if requirements_path in seen:
-                continue  # Avoids circular local_dependencies
+                continue
+
             if verbose:
                 print(f"📄 Parsing `{include}` from `local_dependencies`")
-            datas.append(_load(requirements_path, yaml))
+
+            loaded = _load(requirements_path, yaml)
+            datas.append(loaded)
+            selected_extras.append(current_extras)
             seen.add(requirements_path)
 
     identifier = -1
-    for data in datas:
+
+    for data, current_extras in zip(datas, selected_extras):
         for channel in data.get("channels", []):
             channels.add(channel)
+
         for _platform in data.get("platforms", []):
             platforms.add(_platform)
+
         if "dependencies" not in data:
             continue
+
         dependencies = data["dependencies"]
-        for i, dep in enumerate(data["dependencies"]):
+
+        for i, dep in enumerate(dependencies):
             identifier += 1
+
             if isinstance(dep, str):
                 specs = _parse_dependency(
                     dep,
@@ -252,10 +304,14 @@ def parse_requirements(  # noqa: PLR0912
                     overwrite_pins_map,
                     skip_dependencies,
                 )
+
                 for spec in specs:
                     requirements[spec.name].append(spec)
+
                 continue
+
             assert isinstance(dep, dict)
+
             for which in ["conda", "pip"]:
                 if which in dep:
                     specs = _parse_dependency(
@@ -268,11 +324,64 @@ def parse_requirements(  # noqa: PLR0912
                         overwrite_pins_map,
                         skip_dependencies,
                     )
+
                     for spec in specs:
                         requirements[spec.name].append(spec)
 
-    return ParsedRequirements(sorted(channels), sorted(platforms), dict(requirements))
+        optional = data.get("optional_dependencies", {})
 
+        for extra_name, deps in optional.items():
+
+            if extras != "*" and current_extras and extra_name not in current_extras:
+                continue
+
+            for i, dep in enumerate(deps):
+                identifier += 1
+
+                if isinstance(dep, str):
+                    specs = _parse_dependency(
+                        dep,
+                        deps,
+                        i,
+                        "both",
+                        identifier,
+                        ignore_pins,
+                        overwrite_pins_map,
+                        skip_dependencies,
+                    )
+
+                    for spec in specs:
+                        optional_dependencies[extra_name][spec.name].append(spec)
+
+                    continue
+
+                assert isinstance(dep, dict)
+
+                for which in ["conda", "pip"]:
+                    if which in dep:
+                        specs = _parse_dependency(
+                            dep[which],
+                            dep,
+                            which,
+                            which,  # type: ignore[arg-type]
+                            identifier,
+                            ignore_pins,
+                            overwrite_pins_map,
+                            skip_dependencies,
+                        )
+
+                        for spec in specs:
+                            optional_dependencies[extra_name][spec.name].append(spec)
+
+    return ParsedRequirements(
+        sorted(channels),
+        sorted(platforms),
+        dict(requirements),
+        {
+            extra: dict(packages)
+            for extra, packages in optional_dependencies.items()
+        },
+    )
 
 # Alias for backwards compatibility
 parse_yaml_requirements = parse_requirements

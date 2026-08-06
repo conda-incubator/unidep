@@ -2067,3 +2067,35 @@ def test_dot_in_package_name(
             Spec(name="ruamel.yaml", which="pip", identifier="17e5d607"),
         ],
     }
+
+
+@pytest.mark.parametrize("toml_or_yaml", ["toml", "yaml"])
+def test_parse_requirements_with_extras(
+    toml_or_yaml: Literal["toml", "yaml"],
+    tmp_path: Path,
+) -> None:
+    p = tmp_path / "requirements.yaml"
+    p.write_text(
+        textwrap.dedent(
+            """\
+            dependencies:
+              - numpy
+
+            optional_dependencies:
+              dev:
+                - pytest
+            """
+        ),
+    )
+
+    p = maybe_as_toml(toml_or_yaml, p)
+
+    requirements = parse_requirements(
+        p,
+        extras=[["dev"]],
+        verbose=False,
+    )
+
+    assert requirements.optional_dependencies["dev"]["pytest"][0].name == "pytest"
+
+    
